@@ -1,0 +1,7 @@
+{
+  "name": "Camera AI",
+  "version": "0.2.0",
+  "status": "active",
+  "model": "llama-3.1-8b-instant",
+  "description": "The Ontological Genesis Fabric"
+}
