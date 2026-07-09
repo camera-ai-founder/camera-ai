@@ -1,0 +1,62 @@
+{
+  "name": "camera-ai",
+  "displayName": "Camera AI",
+  "description": "The Ontological Genesis Fabric IDE Interface",
+  "version": "0.0.1",
+  "publisher": "camera-ai-founder",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["*"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "camera-ai.hello",
+        "title": "Camera AI: Hello"
+      },
+      {
+        "command": "camera-ai.refresh",
+        "title": "Camera AI: Refresh Status",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "camera-ai-sidebar",
+          "title": "Camera AI",
+          "icon": "$(device-camera)"
+        }
+      ]
+    },
+    "views": {
+      "camera-ai-sidebar": [
+        {
+          "id": "camera-ai-status",
+          "name": "Status"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "camera-ai.refresh",
+          "when": "view == camera-ai-status",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.91.0",
+    "typescript": "^5.4.0"
+  }
+}
