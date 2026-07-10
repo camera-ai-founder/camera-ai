@@ -1,61 +1,88 @@
 import * as vscode from 'vscode';
+import { spawn } from 'child_process';
+import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Camera AI is now active');
+    console.log('Camera AI is active! Waiting for commands...');
 
-    // 1. Register the Hello Command
-    let disposableHello = vscode.commands.registerCommand('camera-ai.hello', () => {
-        vscode.window.showInformationMessage('Camera AI is online and ready to mutate the Ontological Graph.');
+    const disposable = vscode.commands.registerCommand('camera-ai.analyze', async () => {
+        
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showErrorMessage('Camera AI: Please open a file first.');
+            return;
+        }
+
+        const selection = editor.selection;
+        const highlightedText = editor.document.getText(selection);
+
+        if (!highlightedText || highlightedText.trim() === '') {
+            vscode.window.showErrorMessage('Camera AI: Please highlight code first.');
+            return;
+        }
+
+        const workspaceRoot = vscode.workspace.workspaceFolders 
+            ? vscode.workspace.workspaceFolders[0].uri.fsPath 
+            : '';
+
+        const venvPython = path.join(workspaceRoot, '.venv', 'bin', 'python');
+        const cliPath = path.join(workspaceRoot, 'apps', 'cli', 'camera_cli.py');
+
+        vscode.window.showInformationMessage('Camera AI is thinking...');
+
+        const pythonProcess = spawn(venvPython, [cliPath, 'generate', highlightedText], {
+            cwd: workspaceRoot
+        });
+
+        let stdoutData = '';
+        let stderrData = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+            stdoutData += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            stderrData += data.toString();
+        });
+
+        pythonProcess.on('close', (code) => {
+            if (code !== 0) {
+                vscode.window.showErrorMessage(`Camera AI Error: ${stderrData}`);
+                return;
+            }
+
+            try {
+                const cleanOutput = stdoutData.trim();
+                const jsonStart = cleanOutput.indexOf('{');
+                const jsonEnd = cleanOutput.lastIndexOf('}');
+                
+                if (jsonStart === -1 || jsonEnd === -1) {
+                    vscode.window.showWarningMessage('Camera AI: Output was not JSON.');
+                    return;
+                }
+                
+                const jsonString = cleanOutput.substring(jsonStart, jsonEnd + 1);
+                const ontologicalGraph = JSON.parse(jsonString);
+                
+                const nodesCount = ontologicalGraph.nodes ? ontologicalGraph.nodes.length : 0;
+                const edgesCount = ontologicalGraph.edges ? ontologicalGraph.edges.length : 0;
+                
+                vscode.window.showInformationMessage(
+                    `Camera AI Success! Extracted ${nodesCount} nodes and ${edgesCount} edges.`
+                );
+                
+                const outputChannel = vscode.window.createOutputChannel('Camera AI Graph');
+                outputChannel.clear();
+                outputChannel.appendLine(JSON.stringify(ontologicalGraph, null, 2));
+                outputChannel.show(true);
+
+            } catch (error: any) {
+                vscode.window.showErrorMessage(`Camera AI Parse Error: ${error.message}`);
+            }
+        });
     });
 
-    // 2. Register the Sidebar Tree View
-    const treeDataProvider = new CameraAITreeDataProvider();
-    const treeView = vscode.window.createTreeView('camera-ai-status', { treeDataProvider });
-
-    // 3. Register the Refresh Command
-    let disposableRefresh = vscode.commands.registerCommand('camera-ai.refresh', () => {
-        treeDataProvider.refresh();
-        vscode.window.showInformationMessage('Camera AI Status Refreshed!');
-    });
-
-    context.subscriptions.push(disposableHello, disposableRefresh, treeView);
+    context.subscriptions.push(disposable);
 }
 
 export function deactivate() {}
-
-// --- Tree Data Provider for the Sidebar ---
-class CameraAITreeDataProvider implements vscode.TreeDataProvider<CameraAIItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<CameraAIItem | undefined | void> = new vscode.EventEmitter<CameraAIItem | undefined | void>();
-    readonly onDidChangeTreeData: vscode.Event<CameraAIItem | undefined | void> = this._onDidChangeTreeData.event;
-
-    refresh(): void {
-        this._onDidChangeTreeData.fire();
-    }
-
-    getTreeItem(element: CameraAIItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(element?: CameraAIItem): Thenable<CameraAIItem[]> {
-        if (element) {
-            return Promise.resolve([]);
-        } else {
-            return Promise.resolve([
-                new CameraAIItem('Ontological Graph', vscode.TreeItemCollapsibleState.None),
-                new CameraAIItem('Status: ONLINE', vscode.TreeItemCollapsibleState.None),
-                new CameraAIItem('Memory Usage: 12%', vscode.TreeItemCollapsibleState.None)
-            ]);
-        }
-    }
-}
-
-class CameraAIItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState
-    ) {
-        super(label, collapsibleState);
-        this.tooltip = `Camera AI: ${label}`;
-    }
-    iconPath = new vscode.ThemeIcon('radio-tower');
-}
