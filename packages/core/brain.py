@@ -30,14 +30,14 @@ else:
 
 
 # ==========================================
-# 2. DAY 7: FETCHING THE MEMORY (UPDATED!)
+# 2. DAY 7: FETCHING THE MEMORY
 # ==========================================
 def get_current_context():
     if not supabase:
         return "Supabase is not connected. Starting from scratch."
 
     try:
-        # We now select 'scene_data' instead of 'nodes'
+        # We select 'scene_data' to remember our world
         response = supabase.table("projects").select("id, name, scene_data").order("created_at", desc=True).limit(1).execute()
         
         if response.data and len(response.data) > 0:
@@ -47,7 +47,6 @@ def get_current_context():
             
             context_string = f"The user's current project is named '{project_name}'."
             
-            # Summarize the awesome 3D scene Groq built!
             if scene_data and isinstance(scene_data, dict):
                 scene_info = scene_data.get("scene", {})
                 scene_name = scene_info.get("name", "a generated scene")
@@ -71,7 +70,7 @@ def get_current_context():
 
 
 # ==========================================
-# 3. DAY 7: INJECTING CONTEXT & GENERATING
+# 3. DAY 8: THE FRACTAL ENGINE GENERATION
 # ==========================================
 def generate(user_prompt: str):
     if not client:
@@ -81,15 +80,21 @@ def generate(user_prompt: str):
     print(f"Camera AI is thinking about: '{user_prompt}'...")
     project_memory = get_current_context()
 
-    # We loosen the prompt slightly so Groq can generate its awesome 3D scenes freely!
+    # DAY 8 UPGRADE: Teaching Camera AI to build hierarchical, infinite fractal worlds!
     system_prompt = f"""You are Camera AI, the Ontological Genesis Fabric. 
-    You are a master at building 3D scenes and game logic.
+    You are a master at building massive, hierarchical 3D worlds using nested JSON.
+
+    FRACTAL ENGINE RULES:
+    1. Always structure your output as a hierarchy. Top-level items (like a City or World) must contain a "children" array.
+    2. Child items (like Districts, Buildings, or Rooms) go inside that "children" array. Children can also have their own "children" arrays for infinite depth.
+    3. Every single item must have a "name", "type", and "description".
+    4. You MUST output strict, valid JSON. No markdown, no explanations, no code blocks.
+    5. If updating an existing scene, preserve the existing hierarchy and attach new children to the correct parent.
 
     Here is the current state of the user's project: 
     {project_memory}
 
-    Based on this memory and their new request below, fulfill their request. 
-    You MUST output strict JSON. If adding to an existing scene, include the existing objects and add the new ones.
+    Based on this memory and their new request, generate the hierarchical JSON.
     Do not output markdown or anything else."""
 
     try:
@@ -103,9 +108,11 @@ def generate(user_prompt: str):
         )
 
         raw_json = response.choices[0].message.content
+        
+        # Verify it is valid JSON
         json.loads(raw_json) 
         
-        print("Camera AI generated new JSON!")
+        print("Camera AI generated new Fractal JSON!")
         return raw_json
 
     except Exception as e:
