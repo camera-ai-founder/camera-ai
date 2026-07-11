@@ -1,81 +1,64 @@
-from packages.core.database import save_project, get_project, list_projects
-from packages.core import brain
-import json
 import os
+from supabase import create_client
+from rich.tree import Tree
+from rich.console import Console
 
-class GraphEngine:
-    """Camera AI: The Graph Engine - Core Intelligence of the OGF"""
-    
-    def __init__(self):
-        self.current_project = None
-        print("Camera AI: Graph Engine initialized and ready!")
-    
-    def generate_and_save(self, prompt: str, project_name: str, description: str = ""):
-        """
-        Camera AI: Generate content using Groq AI and automatically save it to Memory Vault
-        """
-        print(f"Camera AI: Generating '{project_name}'...")
-        
-        # Step 1: Use the brain to generate content
-        ai_response = brain.generate(prompt)
-        
-        # Step 2: Structure the graph data
-        graph_data = {
-            "prompt": prompt,
-            "output": ai_response,
-            "type": "generated_content",
-            "model": "llama-3.1-8b-instant"
-        }
-        
-        # Step 3: Save to Supabase Memory Vault
-        saved_data = save_project(
-            name=project_name,
-            description=description if description else f"Auto-generated project: {project_name}",
-            graph_data=graph_data
-        )
-        
-        self.current_project = project_name
-        print(f"Camera AI: '{project_name}' saved to Memory Vault!")
-        
-        return {
-            "project_name": project_name,
-            "ai_response": ai_response,
-            "saved_data": saved_data
-        }
-    
-    def retrieve_project(self, project_name: str):
-        """Camera AI: Retrieve a project from Memory Vault by name"""
-        print(f"Camera AI: Retrieving '{project_name}' from Memory Vault...")
-        project = get_project(project_name)
-        
-        if project and len(project) > 0:
-            print(f"Camera AI: Found '{project_name}'!")
-            return project[0]
-        else:
-            print(f"Camera AI: Project '{project_name}' not found in Memory Vault.")
-            return None
-    
-    def get_all_projects(self):
-        """Camera AI: List all projects in Memory Vault"""
-        print("Camera AI: Fetching all projects from Memory Vault...")
-        projects = list_projects()
-        
-        if projects and len(projects) > 0:
-            print(f"Camera AI: Found {len(projects)} project(s) in Memory Vault:")
-            for p in projects:
-                print(f"  - {p['name']} (Created: {p['created_at'][:10]})")
-        else:
-            print("Camera AI: No projects found in Memory Vault.")
-        
-        return projects
-    
-    def get_project_graph(self, project_name: str):
-        """Camera AI: Get the full graph data for a project"""
-        project = self.retrieve_project(project_name)
-        
-        if project:
-            return project.get('graph_data', {})
-        return None
+# 1. Get our Supabase credentials from the Codespaces environment
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-# Camera AI: Create a global instance for easy access
-graph_engine = GraphEngine()
+# 2. Connect to Supabase
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# 3. Initialize Rich Console for beautiful terminal printing
+console = Console()
+
+def build_tree_from_json(node_data, tree_branch):
+    """
+    A recursive function that reads the nested JSON and builds the visual tree.
+    """
+    # Get the name of the node (fallback to 'type' if name is missing)
+    name = node_data.get("name") or node_data.get("type") or "Unknown Node"
+    
+    # Add this node to the current branch of the tree
+    branch = tree_branch.add(f"[bold cyan]{name}[/bold cyan]")
+    
+    # Find the children of this node in the JSON
+    children = node_data.get("children", [])
+    
+    # RECURSION MAGIC: For every child, call this exact same function again!
+    for child in children:
+        build_tree_from_json(child, branch)
+
+def render_tree(project_id: str):
+    """
+    Fetches the project's scene_data from Supabase and draws the tree.
+    """
+    # 1. Fetch the project from the 'projects' table using the ID
+    response = supabase.table("projects").select("scene_data, name").eq("id", project_id).execute()
+    
+    if not response.data:
+        console.print("[red]Project not found in Memory Vault![/red]")
+        return
+        
+    project = response.data[0]
+    scene_data = project.get("scene_data")
+    
+    if not scene_data:
+        console.print("[yellow]No fractal data (scene_data) found for this project.[/yellow]")
+        return
+        
+    # 2. Create the base (trunk) of the Rich Tree
+    project_name = project.get("name") or "Project"
+    rich_tree = Tree(f"[bold green]Camera AI: {project_name}[/bold green]")
+    
+    # 3. Start the recursion!
+    # (We check if it's a list or a single object just to be safe)
+    if isinstance(scene_data, list):
+        for root_node in scene_data:
+            build_tree_from_json(root_node, rich_tree)
+    else:
+        build_tree_from_json(scene_data, rich_tree)
+        
+    # 4. Print the beautiful branching tree to the terminal!
+    console.print(rich_tree)

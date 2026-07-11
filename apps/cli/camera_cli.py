@@ -13,7 +13,7 @@ from rich.table import Table
 load_dotenv()
 
 # ==========================================
-# 2. SETUP PATHS SO WE CAN FIND BRAIN.PY
+# 2. SETUP PATHS SO WE CAN FIND CORE PACKAGES
 # ==========================================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 core_path = os.path.abspath(os.path.join(current_dir, '..', '..', 'packages', 'core'))
@@ -22,6 +22,8 @@ if core_path not in sys.path:
     sys.path.insert(0, core_path)
 
 from brain import generate, get_current_context
+# NEW IMPORT FOR DAY 9: Bringing in our tree builder!
+from graph_engine import render_tree 
 
 # ==========================================
 # 3. SETUP CLI & CONNECTIONS
@@ -66,12 +68,14 @@ def list_projects():
             return
 
         table = Table(title="Camera AI - Saved Projects", show_lines=True)
-        table.add_column("ID", style="dim", width=8)
+        # Made the ID column wider for the full ID!
+        table.add_column("ID", style="dim", width=36)
         table.add_column("Name", style="magenta")
         table.add_column("Created", style="green")
         
         for p in projects:
-            p_id = str(p.get("id"))[:8]
+            # DAY 9 FIX: Removed the [:8] so we get the FULL ID!
+            p_id = str(p.get("id"))
             p_name = p.get("name") or p.get("title") or "Untitled"
             created_at = p.get("created_at")
             p_date = created_at[:10] if created_at else "N/A"
@@ -99,12 +103,13 @@ def search(query_string):
             return
             
         table = Table(title=f"Search Results for '{query_string}'", show_lines=True)
-        table.add_column("ID", style="dim", width=8)
+        table.add_column("ID", style="dim", width=36)
         table.add_column("Name", style="magenta")
         table.add_column("Created", style="green")
         
         for p in results:
-            p_id = str(p.get("id"))[:8]
+            # DAY 9 FIX: Removed the [:8] so we get the FULL ID!
+            p_id = str(p.get("id"))
             p_name = p.get("name") or p.get("title") or "Untitled"
             created_at = p.get("created_at")
             p_date = created_at[:10] if created_at else "N/A"
@@ -157,6 +162,19 @@ def run_generate(prompt, name):
         console.print(f"[dim]Raw output: {result_json}[/dim]")
     except Exception as e:
         console.print(f"[bold red]Error processing result: {e}[/bold red]")
+
+# ==========================================
+# 4. NEW DAY 9 COMMAND: VIEW THE FRACTAL TREE
+# ==========================================
+@cli.command(name="view")
+@click.argument("project_id")
+def view_project(project_id):
+    """Visualize the fractal ontology tree for a specific project ID."""
+    console.print(f"[bold cyan]Fetching fractal tree for Project ID: {project_id}...[/bold cyan]")
+    try:
+        render_tree(project_id)
+    except Exception as e:
+        console.print(f"[bold red]Error rendering tree: {e}[/bold red]")
 
 if __name__ == "__main__":
     cli()
