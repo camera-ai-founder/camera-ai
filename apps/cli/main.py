@@ -1,3 +1,13 @@
+import sys
+import os
+
+# ==========================================
+# THE PATH FIX (Crucial for Python to find 'packages')
+# ==========================================
+# This tells Python: "Look at the folder this file is in, 
+# then walk up two levels to find the main project root."
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
 import click
 from rich.console import Console
 from rich.spinner import Spinner
@@ -5,8 +15,15 @@ from rich.live import Live
 from rich.tree import Tree
 from rich.panel import Panel
 
-# Import our bridge from Step 2
-from camera_cli import ask_brain
+# ==========================================
+# IMPORTS (Fixed to point to the correct locations)
+# ==========================================
+# Fix for ImportError: Get the actual function from the brain
+from packages.core.brain import generate as ask_brain
+
+# Day 12 Imports: The Juice Engine
+from packages.core.models import ImpactVector, JuiceProfile
+from packages.core import juice_engine, brain
 
 # Initialize Rich for beautiful terminal colors and formatting
 console = Console()
@@ -16,6 +33,9 @@ def camera():
     """Camera AI: The Ontological Genesis Fabric CLI."""
     pass
 
+# ==========================================
+# DAY 11 COMMAND: THE FRACTAL GENERATOR
+# ==========================================
 @camera.command()
 @click.argument('prompt')
 def generate(prompt):
@@ -58,6 +78,45 @@ def generate(prompt):
             
     # Print the final masterpiece in a nice blue box
     console.print(Panel(tree, title="[bold]Camera AI Output[/bold]", border_style="blue"))
+
+# ==========================================
+# DAY 12 COMMANDS: THE JUICE ENGINE
+# ==========================================
+@camera.group()
+def juice():
+    """Commands for the Juice Engine (Physics & Narrative)."""
+    pass
+
+@juice.command()
+def test():
+    """Test the Juice Engine with a default, low-impact collision."""
+    console.print("\n[bold cyan]🧪 Testing Juice Engine...[/bold cyan]")
+    
+    # 1. Calculate a gentle push
+    vector = juice_engine.calculate_impact_vector(force=20.0)
+    juice_profile = JuiceProfile(impact_type="light_bounce", ragdoll_decay=0.3, impact_vector=vector)
+    
+    # 2. Get the AI narrative
+    narrative = brain.generate_narrative_impact(juice_profile, "the test box")
+    
+    console.print(f"[green]📖 Narrative:[/green] {narrative}")
+    console.print(f"[yellow]📐 Vector:[/yellow] {vector.model_dump()}")
+
+@juice.command()
+@click.argument('force', type=float)
+def impact(force):
+    """Trigger a custom, high-velocity impact with a specific force."""
+    console.print(f"\n[bold red]💥 Triggering massive impact with force: {force}![/bold red]")
+    
+    # 1. Calculate a heavy smash
+    vector = juice_engine.calculate_impact_vector(force=force)
+    juice_profile = JuiceProfile(impact_type="heavy_smash", ragdoll_decay=0.9, impact_vector=vector)
+    
+    # 2. Get the AI narrative
+    narrative = brain.generate_narrative_impact(juice_profile, "the target")
+    
+    console.print(f"[green]📖 Narrative:[/green] {narrative}")
+    console.print(f"[yellow]📐 Vector:[/yellow] {vector.model_dump()}")
 
 # This allows us to run the file directly
 if __name__ == '__main__':

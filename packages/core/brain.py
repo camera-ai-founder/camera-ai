@@ -5,9 +5,9 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11 NEW IMPORT: The Blueprint
+# 1. DAY 11 & 12 NEW IMPORTS: The Blueprints
 # ==========================================
-from .models import WorldState
+from .models import WorldState, JuiceProfile
 
 # ==========================================
 # 2. LOAD SECRETS FIRST 
@@ -190,3 +190,41 @@ def update_world_state(project_id: str, changes_dict: dict):
 
     except Exception as e:
         print(f"Error updating world state: {e}")
+
+# ==========================================
+# 6. DAY 12: NARRATIVE IMPACT (The Juice Translator)
+# ==========================================
+def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the object") -> str:
+    """
+    Asks the Groq AI to turn our math (JuiceProfile) into a cool story description!
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return "The object hits something."
+
+    # Extract the math into simple English for the AI
+    force = juice.impact_vector.force if juice.impact_vector else 0
+    impact_type = juice.impact_type
+
+    # Create the prompt
+    prompt = f"""
+    You are a cinematic game director. Describe a physical impact in one exciting sentence.
+    The object is: {object_name}.
+    The type of impact is: {impact_type}.
+    The raw force applied was: {force} units.
+    
+    Make it sound intense and juicy!
+    """
+
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "You are a cinematic game narrative writer."},
+                {"role": "user", "content": prompt},
+            ],
+            model="llama-3.3-70b-versatile",
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        print(f"Error generating narrative impact: {e}")
+        return f"The {object_name} impacts with {impact_type} force."
