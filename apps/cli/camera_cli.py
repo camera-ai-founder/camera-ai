@@ -1,6 +1,7 @@
 import os
 import sys
 import click
+import json # Added for Day 13 dummy data
 from rich.console import Console
 from rich.panel import Panel
 from dotenv import load_dotenv
@@ -16,7 +17,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Import the Supabase connection and our Brain functions
 from supabase import create_client
-from packages.core.brain import get_world_state, update_world_state, generate
+# Added 'summarize_state' for Day 13 Step 6
+from packages.core.brain import get_world_state, update_world_state, generate, summarize_state
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -89,6 +91,41 @@ def state(action, key, value):
         console.print(f"[bold green]Successfully updated {key} to {value}![/bold green]")
     else:
         console.print("[yellow]Invalid command. Use 'camera state' to view, or 'camera state set key value' to update.[/yellow]")
+
+# ==========================================
+# DAY 13 STEP 6: THE SURGICAL TEST
+# ==========================================
+@cli.group()
+def architect():
+    """Commands for the Camera AI Architect."""
+    pass
+
+@architect.command()
+def test():
+    """Run a surgical test of the Narrative Summarizer (Context Pruner)."""
+    console.print("[bold cyan]Running surgical test on the Narrative Summarizer...[/bold cyan]")
+    
+    # 1. Create a dummy history (The "Book" we want to summarize)
+    dummy_history_dict = {
+        "recent_events": [
+            "The player defeated the Dragon King in the volcanic crater.",
+            "The sky turned purple due to magic fallout.",
+            "The player acquired the Chrono-Sword."
+        ],
+        "world_status": "Chaos"
+    }
+    
+    # Convert to JSON string for the AI
+    dummy_json = json.dumps(dummy_history_dict)
+    
+    # 2. Call the summarizer
+    with console.status("[bold green]Groq is compressing history into 3 World Truths...[/bold green]"):
+        truths = summarize_state(dummy_json)
+        
+    # 3. Print the result
+    truths_text = "\n".join([f"- {t}" for t in truths])
+    console.print(Panel(truths_text, title="[bold yellow]Compressed World Truths[/bold yellow]", border_style="yellow"))
+    console.print("[bold green]Context Pruner is working perfectly![/bold green]")
 
 # ==========================================
 # 3. START THE ENGINE

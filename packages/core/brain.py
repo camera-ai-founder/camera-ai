@@ -74,7 +74,7 @@ def get_current_context():
 
 
 # ==========================================
-# 4. DAY 8: THE FRACTAL ENGINE GENERATION (WITH STEP 4 UPGRADE)
+# 4. DAY 8 & DAY 13: THE FRACTAL ENGINE GENERATION 
 # ==========================================
 def generate(user_prompt: str):
     if not client:
@@ -84,7 +84,7 @@ def generate(user_prompt: str):
     print(f"Camera AI is thinking about: '{user_prompt}'...")
     project_memory = get_current_context()
 
-    # --- DAY 11 STEP 4: INJECTING THE WORLD STATE ---
+    # --- DAY 11 & 13: FETCHING STATE & WORLD TRUTHS ---
     project_id = None
     if supabase:
         id_response = supabase.table("projects").select("id").order("created_at", desc=True).limit(1).execute()
@@ -93,12 +93,23 @@ def generate(user_prompt: str):
 
     current_state = get_world_state(project_id)
     state_context = f"CURRENT GAME STATE: The player's Heat/Wanted Level is {current_state.heat_level}/5. The current time of day is {current_state.time_of_day}."
-    # ------------------------------------------------
+    
+    # DAY 13 STEP 3: INJECTING CONTEXT PRUNING (WORLD TRUTHS)
+    # We convert the current state to a JSON string to feed the summarizer
+    raw_history_json = json.dumps(current_state.model_dump())
+    world_truths = summarize_state(raw_history_json)
+    
+    # Format the 3 truths into a bulleted list for the prompt
+    truths_string = "\n".join([f"- {truth}" for truth in world_truths])
+    # ---------------------------------------------------
 
     system_prompt = f"""You are Camera AI, the Ontological Genesis Fabric. 
     You are a master at building massive, hierarchical 3D worlds using nested JSON.
 
     {state_context}
+
+    CRITICAL WORLD TRUTHS (DO NOT CONTRADICT THESE):
+    {truths_string}
 
     FRACTAL ENGINE RULES:
     1. Always structure your output as a hierarchy. Top-level items (like a City or World) must contain a "children" array.
@@ -106,12 +117,12 @@ def generate(user_prompt: str):
     3. Every single item must have a "name", "type", and "description".
     4. You MUST output strict, valid JSON. No markdown, no explanations, no code blocks.
     5. If updating an existing scene, preserve the existing hierarchy and attach new children to the correct parent.
-    6. CRITICAL: Respect the CURRENT GAME STATE. If Heat Level is high, generate chaotic or dangerous elements. If it is 0, generate peaceful elements.
+    6. CRITICAL: Respect the CURRENT GAME STATE and WORLD TRUTHS. If Heat Level is high, generate chaotic elements. 
 
     Here is the current state of the user's project: 
     {project_memory}
 
-    Based on this memory, the game state, and their new request, generate the hierarchical JSON.
+    Based on this memory, the game state, the World Truths, and their new request, generate the hierarchical JSON.
     Do not output markdown or anything else."""
 
     try:
@@ -228,3 +239,45 @@ def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the objec
     except Exception as e:
         print(f"Error generating narrative impact: {e}")
         return f"The {object_name} impacts with {impact_type} force."
+
+
+# ==========================================
+# 7. DAY 13: THE NARRATIVE SUMMARIZER (Context Pruning)
+# ==========================================
+def summarize_state(raw_history_json: str) -> list:
+    """
+    TIER 2 BRAIN: Context Pruning.
+    Compresses massive game history into 3 simple 'World Truths' so the AI never forgets.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return ["The world is in an unknown state."]
+
+    # 1. We write a strict prompt for Groq
+    prompt = f"""
+    You are the Narrative Summarizer for an AI game. 
+    Here is the raw JSON history of recent game events:
+    {raw_history_json}
+
+    Your task: Compress this history into exactly 3 permanent 'World Truths'. 
+    Keep them short, factual, and crucial for the AI to remember so it doesn't contradict itself.
+    
+    You MUST return ONLY a JSON object with a key called "truths" that contains a list of 3 strings.
+    Example format: {{ "truths": ["The king is dead.", "The player has the sword.", "It is raining."] }}
+    """
+    
+    # 2. We ask Groq to do the heavy thinking in the cloud
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"} # Forces Groq to only speak JSON
+        )
+        
+        # 3. We unpack the 3 World Truths
+        content = json.loads(response.choices[0].message.content)
+        return content.get("truths", ["The world is currently calm."])
+    except Exception as e:
+        print(f"Error summarizing state: {e}")
+        # Failsafe: If Groq messes up the JSON, we return a default truth.
+        return ["The world is in an unknown state."]

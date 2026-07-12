@@ -1,9 +1,66 @@
 // ==========================================
-// DAY 12: THE 3D PROJECTION ENGINE
+// DAY 12 & 13: THE 3D PROJECTION ENGINE
 // Runs entirely in the browser. Pure Math, no heavy physics plugins!
 // ==========================================
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+// ==========================================
+// DAY 13 STEP 5: THE GLSL BREATHING SHADER
+// ==========================================
+
+/**
+ * Creates a standard Three.js material but injects custom GLSL math 
+ * to make the primitive box gently "breathe" in and out.
+ */
+function createBreathingMaterial(colorHex = 0x00ff00) {
+    // Start with a normal material so we keep our lighting and shadows
+    const material = new THREE.MeshStandardMaterial({ color: colorHex });
+    
+    // onBeforeCompile lets us inject our own math into Three.js's default code
+    material.onBeforeCompile = function (shader) {
+        // 1. Create a 'time' variable (uniform) that we can update every frame
+        shader.uniforms.time = { value: 0.0 };
+        
+        // 2. Inject the 'time' variable into the top of the Vertex Shader
+        shader.vertexShader = 'uniform float time;\n' + shader.vertexShader;
+        
+        // 3. Replace the default vertex math with our custom breathing math
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
+            
+            // --- DAY 13 GLSL MATH ---
+            // sin(time * 2.0) creates a smooth wave between -1 and 1.
+            // We multiply by 0.05 to keep the breathing subtle.
+            // We multiply by position.y so the top of the box breathes more than the bottom.
+            float breath = sin(time * 2.0) * 0.05 * position.y;
+            
+            // Push the corners of the box outward
+            transformed += vec3(breath, breath, breath);
+            `
+        );
+        
+        // Save the shader to the material so we can update the time in our animation loop
+        material.userData.shader = shader;
+    };
+    
+    return material;
+}
+
+/**
+ * Call this inside your main animation/render loop 
+ * to keep the shader's internal clock moving forward.
+ */
+function updateBreathingMaterials(scene, elapsedTime) {
+    // traverse just means "look at every object in the scene"
+    scene.traverse((child) => {
+        if (child.isMesh && child.material && child.material.userData && child.material.userData.shader) {
+            // Feed the current time into our GLSL shader
+            child.material.userData.shader.uniforms.time.value = elapsedTime;
+        }
+    });
+}
 
 // 1. Setup the Scene
 const scene = new THREE.Scene();
@@ -23,9 +80,11 @@ light.position.set(5, 5, 5);
 scene.add(light);
 scene.add(new THREE.AmbientLight(0x404040, 0.5));
 
-// 2. Create a Test Object (A simple box we can smash!)
+// 2. Create a Test Object (A simple box we can smash AND breathe!)
 const geometry = new THREE.BoxGeometry(1, 1, 1);
-const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Neon Green
+
+// DAY 13 UPGRADE: Use our custom breathing material instead of the basic one
+const material = createBreathingMaterial(0x00ff00); // Neon Green
 const testMesh = new THREE.Mesh(geometry, material);
 scene.add(testMesh);
 
@@ -59,6 +118,7 @@ function animate() {
     requestAnimationFrame(animate);
     
     const delta = clock.getDelta(); // Time passed since last frame
+    const elapsedTime = clock.getElapsedTime(); // Total time since engine started (for the shader)
 
     // Apply gravity to Y velocity
     physicsState.velocityY += physicsState.gravity * delta;
@@ -78,6 +138,9 @@ function animate() {
         // Bounce! Reverse velocity and lose some energy
         physicsState.velocityY = -physicsState.velocityY * 0.5; 
     }
+
+    // DAY 13: Tell our breathing shader what time it is so it can animate
+    updateBreathingMaterials(scene, elapsedTime);
 
     // Render the frame
     renderer.render(scene, camera);
