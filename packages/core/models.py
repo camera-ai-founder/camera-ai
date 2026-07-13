@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 
 # Our basic building blocks for the Ontological Brain
 class OntologicalNode(BaseModel):
@@ -121,3 +121,31 @@ class AppDNA(BaseModel):
     """The structural DNA of the requested application."""
     entity_name: str = Field(..., description="The name of the core entity this app manages, e.g., 'User Dashboard'")
     required_components: List[AppComponent] = Field(..., description="Ordered list of components needed to render this app.")
+
+# ==========================================
+# DAY 15 MODELS: THE GENESIS RENDERER (PILLAR 11)
+# ==========================================
+
+class ParametricGenome(BaseModel):
+    """Priority 1: The mathematical DNA to grow 3D objects using pure math."""
+    seed: int = Field(..., description="A deterministic math seed (0-9999) to grow the exact same shape every time.")
+    rules: List[str] = Field(default_factory=list, description="L-System rules or CSG operations to grow the topology.")
+    scale_factor: float = Field(1.0, description="Global scale multiplier for the generated math object.")
+
+class VisualQuery(BaseModel):
+    """Priority 2: The search parameters for our CC0 Asset Swarm fallback."""
+    search_terms: List[str] = Field(..., description="Keywords to search the CC0 asset API (e.g., ['gothic', 'gargoyle']).")
+    fallback_flag: bool = Field(False, description="True if parametric math is insufficient and we MUST download a 3D model.")
+    max_poly_count: int = Field(10000, description="Hard limit for downloaded assets to protect the browser RAM.")
+
+class CameraAction(BaseModel):
+    """Priority 4: The AI Cinematographer's deterministic camera movements."""
+    movement_type: Literal["static", "shaky_cam", "orbit", "dolly_zoom", "tracking"] = Field("static")
+    duration_seconds: float = Field(3.0, description="How long the camera movement lasts.")
+    intensity: float = Field(1.0, description="Strength of the camera effect (e.g., how violent the shaky_cam is).")
+
+class VFXProfile(BaseModel):
+    """Priority 5: Mathematical parameters for cinematic post-processing effects."""
+    fog_density: float = Field(0.0, description="Volumetric fog thickness (0.0 to 1.0).")
+    rain_intensity: float = Field(0.0, description="Screen-space rain amount (0.0 to 1.0).")
+    neon_reflection: float = Field(0.0, description="Wet street neon bounce intensity (0.0 to 1.0).")

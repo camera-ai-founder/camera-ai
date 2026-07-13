@@ -1,10 +1,10 @@
 import os
 import sys
 import click
-import json # Added for Day 13 dummy data
+import json 
 from rich.console import Console
 from rich.panel import Panel
-from rich.syntax import Syntax # NEW for Day 14: Beautiful code printing
+from rich.syntax import Syntax 
 from dotenv import load_dotenv
 
 # ==========================================
@@ -13,15 +13,15 @@ from dotenv import load_dotenv
 load_dotenv()
 console = Console()
 
-# This magic line allows our CLI to look backwards into the 'packages' folder
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-# Import the Supabase connection and our Brain functions
 from supabase import create_client
-# Added 'summarize_state' for Day 13, and 'get_ui_blueprint' for Day 14
 from packages.core.brain import get_world_state, update_world_state, generate, summarize_state, get_ui_blueprint
-# NEW Day 14 Imports for the Synthesizer and Compiler
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
+
+# NEW DAY 15 IMPORTS FOR THE GENESIS RENDERER
+from packages.core.genesis_renderer import genesis_renderer
+from packages.core.models import VisualQuery
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -74,20 +74,17 @@ def state(action, key, value):
         console.print("[bold red]No project found in Supabase! Please create a project first.[/bold red]")
         return
 
-    # If they just type "camera state", show the current state
     if not action:
         current_state = get_world_state(project_id)
         info = f"[bold]Heat Level:[/bold] {current_state.heat_level}/5\n[bold]Time of Day:[/bold] {current_state.time_of_day}"
         console.print(Panel(info, title="[bold blue]Current World State[/bold blue]", border_style="blue"))
         return
 
-    # If they type "camera state set heat_level 5"
     if action.lower() == 'set' and key and value:
-        # Try to convert the value to an integer if it's a number (like 5)
         try:
             value = int(value)
         except ValueError:
-            pass # Keep it as text if it's not a number (like "Night")
+            pass 
 
         changes = {key: value}
         update_world_state(project_id, changes)
@@ -108,7 +105,6 @@ def test():
     """Run a surgical test of the Narrative Summarizer (Context Pruner)."""
     console.print("[bold cyan]Running surgical test on the Narrative Summarizer...[/bold cyan]")
     
-    # 1. Create a dummy history (The "Book" we want to summarize)
     dummy_history_dict = {
         "recent_events": [
             "The player defeated the Dragon King in the volcanic crater.",
@@ -118,14 +114,11 @@ def test():
         "world_status": "Chaos"
     }
     
-    # Convert to JSON string for the AI
     dummy_json = json.dumps(dummy_history_dict)
     
-    # 2. Call the summarizer
     with console.status("[bold green]Groq is compressing history into 3 World Truths...[/bold green]"):
         truths = summarize_state(dummy_json)
         
-    # 3. Print the result
     truths_text = "\n".join([f"- {t}" for t in truths])
     console.print(Panel(truths_text, title="[bold yellow]Compressed World Truths[/bold yellow]", border_style="yellow"))
     console.print("[bold green]Context Pruner is working perfectly![/bold green]")
@@ -147,7 +140,6 @@ def compile(app_name):
     """
     console.print(Panel(f"[bold cyan]Compiling UI for:[/bold cyan] {app_name}", title="Camera AI UI Compiler"))
     
-    # 1. Get the Blueprint from the Brain (Forces JSON, prevents hallucinations)
     blueprint = get_ui_blueprint(app_name)
     
     if not blueprint:
@@ -160,15 +152,39 @@ def compile(app_name):
     console.print(f"[bold green]Brain returned DNA for:[/bold green] {app_dna.entity_name}")
     console.print(f"[bold yellow]Primary Accent Color:[/bold yellow] {design_tokens.accent_primary}")
 
-    # 2. Synthesize the Design Tokens (Translate to strict Tailwind/Framer configs)
     design_config = synthesize_design_tokens(design_tokens)
-    
-    # 3. Compile the UI (Stitch the Vault templates together)
     final_react_code = compile_ui(app_dna, design_config)
     
-    # 4. Print the final code beautifully to the terminal using Rich Syntax
     syntax = Syntax(final_react_code, "jsx", theme="monokai", line_numbers=True)
     console.print(Panel(syntax, title="Final React Code (Zero Hallucinations)", border_style="green"))
+
+# ==========================================
+# DAY 15: THE GENESIS RENDERER TEST
+# ==========================================
+@cli.command()
+def test_genesis():
+    """[Day 15] Triggers the Genesis Pipeline to test the Cinematic Illusion."""
+    console.print(Panel("[bold green]Initiating Day 15: Genesis Renderer Test[/bold green]"))
+    
+    # 1. Test the Asset Swarm (Priority 2)
+    console.print("\n[cyan]1. Testing Asset Swarm...[/cyan]")
+    test_query = VisualQuery(
+        search_terms=["gothic", "gargoyle"], 
+        fallback_flag=True, 
+        max_poly_count=10000
+    )
+    asset_result = genesis_renderer.process_visual_query(test_query)
+    console.print(f"Result: {asset_result}")
+    
+    # 2. Test Voice & Emotion (Priority 6)
+    console.print("\n[cyan]2. Testing Voice & Emotion...[/cyan]")
+    voice_result = genesis_renderer.generate_voice_and_emotion(
+        dialogue="The storm is approaching, Founder.", 
+        emotion="tense"
+    )
+    console.print(f"Result: {voice_result}")
+    
+    console.print("\n[bold green]✅ Genesis Pipeline Test Complete! The Cinematic Illusion Engine is ready.[/bold green]")
 
 # ==========================================
 # 3. START THE ENGINE
