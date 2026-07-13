@@ -101,3 +101,23 @@ class TwoTierOutput(BaseModel):
         default_factory=DramaBudget,
         description="Strict limits on how much chaos the AI is allowed to generate."
     )
+
+# ==========================================
+# DAY 14 MODELS: APP DNA & DESIGN TOKENS
+# ==========================================
+
+class DesignTokens(BaseModel):
+    """The visual and motion DNA of the generated UI. The AI must fill this out."""
+    accent_primary: str = Field(..., description="Hex code for the primary brand color, e.g., '#3B82F6'")
+    spacing_unit: int = Field(..., description="Base padding/margin multiplier in pixels, usually 4 or 8")
+    motion_entrance: str = Field(..., description="Framer Motion entrance animation type, e.g., 'fade-in-up' or 'scale-in'")
+
+class AppComponent(BaseModel):
+    """A single pre-audited component required for the app."""
+    component_name: str = Field(..., description="The exact name of the component from our Template Vault, e.g., 'NavBar' or 'DataGrid'")
+    props: Dict[str, Any] = Field(default_factory=dict, description="Specific properties to pass to the component.")
+
+class AppDNA(BaseModel):
+    """The structural DNA of the requested application."""
+    entity_name: str = Field(..., description="The name of the core entity this app manages, e.g., 'User Dashboard'")
+    required_components: List[AppComponent] = Field(..., description="Ordered list of components needed to render this app.")

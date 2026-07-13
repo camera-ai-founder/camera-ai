@@ -4,6 +4,7 @@ import click
 import json # Added for Day 13 dummy data
 from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax # NEW for Day 14: Beautiful code printing
 from dotenv import load_dotenv
 
 # ==========================================
@@ -17,8 +18,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Import the Supabase connection and our Brain functions
 from supabase import create_client
-# Added 'summarize_state' for Day 13 Step 6
-from packages.core.brain import get_world_state, update_world_state, generate, summarize_state
+# Added 'summarize_state' for Day 13, and 'get_ui_blueprint' for Day 14
+from packages.core.brain import get_world_state, update_world_state, generate, summarize_state, get_ui_blueprint
+# NEW Day 14 Imports for the Synthesizer and Compiler
+from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -126,6 +129,46 @@ def test():
     truths_text = "\n".join([f"- {t}" for t in truths])
     console.print(Panel(truths_text, title="[bold yellow]Compressed World Truths[/bold yellow]", border_style="yellow"))
     console.print("[bold green]Context Pruner is working perfectly![/bold green]")
+
+# ==========================================
+# DAY 14: THE UI COMPILER COMMAND
+# ==========================================
+@cli.group()
+def ui():
+    """UI Compilation Commands."""
+    pass
+
+@ui.command()
+@click.argument("app_name")
+def compile(app_name):
+    """
+    [Day 14] Compiles a flawless, hallucination-free React UI.
+    Usage: python apps/cli/camera_cli.py ui compile "User Dashboard"
+    """
+    console.print(Panel(f"[bold cyan]Compiling UI for:[/bold cyan] {app_name}", title="Camera AI UI Compiler"))
+    
+    # 1. Get the Blueprint from the Brain (Forces JSON, prevents hallucinations)
+    blueprint = get_ui_blueprint(app_name)
+    
+    if not blueprint:
+        console.print("[bold red]Error: Brain failed to return a blueprint.[/bold red]")
+        return
+
+    app_dna = blueprint["app_dna"]
+    design_tokens = blueprint["design_tokens"]
+    
+    console.print(f"[bold green]Brain returned DNA for:[/bold green] {app_dna.entity_name}")
+    console.print(f"[bold yellow]Primary Accent Color:[/bold yellow] {design_tokens.accent_primary}")
+
+    # 2. Synthesize the Design Tokens (Translate to strict Tailwind/Framer configs)
+    design_config = synthesize_design_tokens(design_tokens)
+    
+    # 3. Compile the UI (Stitch the Vault templates together)
+    final_react_code = compile_ui(app_dna, design_config)
+    
+    # 4. Print the final code beautifully to the terminal using Rich Syntax
+    syntax = Syntax(final_react_code, "jsx", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="Final React Code (Zero Hallucinations)", border_style="green"))
 
 # ==========================================
 # 3. START THE ENGINE

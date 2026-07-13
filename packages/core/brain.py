@@ -5,9 +5,10 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11 & 12 NEW IMPORTS: The Blueprints
+# 1. DAY 11, 12 & 14 NEW IMPORTS: The Blueprints
 # ==========================================
-from .models import WorldState, JuiceProfile
+# Added AppDNA, AppComponent, and DesignTokens for Day 14
+from .models import WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens
 
 # ==========================================
 # 2. LOAD SECRETS FIRST 
@@ -95,13 +96,10 @@ def generate(user_prompt: str):
     state_context = f"CURRENT GAME STATE: The player's Heat/Wanted Level is {current_state.heat_level}/5. The current time of day is {current_state.time_of_day}."
     
     # DAY 13 STEP 3: INJECTING CONTEXT PRUNING (WORLD TRUTHS)
-    # We convert the current state to a JSON string to feed the summarizer
     raw_history_json = json.dumps(current_state.model_dump())
     world_truths = summarize_state(raw_history_json)
     
-    # Format the 3 truths into a bulleted list for the prompt
     truths_string = "\n".join([f"- {truth}" for truth in world_truths])
-    # ---------------------------------------------------
 
     system_prompt = f"""You are Camera AI, the Ontological Genesis Fabric. 
     You are a master at building massive, hierarchical 3D worlds using nested JSON.
@@ -180,18 +178,10 @@ def update_world_state(project_id: str, changes_dict: dict):
         return
 
     try:
-        # 1. Read the current state using our Librarian
         current_state = get_world_state(project_id)
-
-        # 2. Convert our Pydantic blueprint back into a normal Python dictionary
-        # (model_dump is Pydantic's way of turning the blueprint back into raw JSON data)
         state_dict = current_state.model_dump()
-
-        # 3. Merge the new changes into our dictionary
-        # (e.g., updating heat_level from 0 to 3)
         state_dict.update(changes_dict)
 
-        # 4. Save it back to Supabase!
         response = supabase.table('projects').update({
             'world_state': state_dict
         }).eq('id', project_id).execute()
@@ -213,11 +203,9 @@ def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the objec
         print("Error: Groq client is not initialized.")
         return "The object hits something."
 
-    # Extract the math into simple English for the AI
     force = juice.impact_vector.force if juice.impact_vector else 0
     impact_type = juice.impact_type
 
-    # Create the prompt
     prompt = f"""
     You are a cinematic game director. Describe a physical impact in one exciting sentence.
     The object is: {object_name}.
@@ -253,7 +241,6 @@ def summarize_state(raw_history_json: str) -> list:
         print("Error: Groq client is not initialized.")
         return ["The world is in an unknown state."]
 
-    # 1. We write a strict prompt for Groq
     prompt = f"""
     You are the Narrative Summarizer for an AI game. 
     Here is the raw JSON history of recent game events:
@@ -266,18 +253,99 @@ def summarize_state(raw_history_json: str) -> list:
     Example format: {{ "truths": ["The king is dead.", "The player has the sword.", "It is raining."] }}
     """
     
-    # 2. We ask Groq to do the heavy thinking in the cloud
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile", 
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} # Forces Groq to only speak JSON
+            response_format={"type": "json_object"} 
         )
         
-        # 3. We unpack the 3 World Truths
         content = json.loads(response.choices[0].message.content)
         return content.get("truths", ["The world is currently calm."])
     except Exception as e:
         print(f"Error summarizing state: {e}")
-        # Failsafe: If Groq messes up the JSON, we return a default truth.
         return ["The world is in an unknown state."]
+
+
+# ==========================================
+# 8. DAY 14: FORCING THE UI BLUEPRINTS (The SaaS Killer)
+# ==========================================
+# We use a strict System Prompt to remind the AI it is ONLY allowed to output JSON.
+UI_SYSTEM_PROMPT = """
+You are the Camera AI UI Architect. 
+You DO NOT write React code, HTML, or CSS. You ONLY output structured JSON.
+Your job is to select components from our Vault and define visual tokens.
+Available Vault Components: 'NavBar', 'DataGrid'.
+Motion options: 'fade-in-up', 'scale-in'.
+"""
+
+def get_ui_blueprint(user_request: str) -> dict:
+    """
+    DAY 14: Asks the Groq Brain for AppDNA and DesignTokens.
+    By forcing JSON mode, we mathematically prevent the AI from hallucinating code.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return None
+
+    print(f"Camera AI is designing UI for: '{user_request}'...")
+    
+    prompt = f"""
+    The user wants to build an app for: "{user_request}"
+    
+    Generate the AppDNA and DesignTokens. 
+    Output ONLY valid JSON with this exact structure:
+    {{
+      "app_dna": {{
+        "entity_name": "string (e.g., 'User Dashboard')",
+        "required_components": [
+          {{"component_name": "NavBar" or "DataGrid", "props": {{}}}}
+        ]
+      }},
+      "design_tokens": {{
+        "accent_primary": "string (Hex code like '#3B82F6')",
+        "spacing_unit": integer (e.g., 4 or 8),
+        "motion_entrance": "string ('fade-in-up' or 'scale-in')"
+      }}
+    }}
+    """
+    
+    try:
+        # We use a fast, lightweight model for simple JSON generation
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant", 
+            messages=[
+                {"role": "system", "content": UI_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2 
+        )
+        
+        raw_json = response.choices[0].message.content
+        data = json.loads(raw_json)
+        
+        # THE CRITICAL SAFETY NET: Pydantic validation
+        app_dna = AppDNA(**data.get("app_dna", {}))
+        design_tokens = DesignTokens(**data.get("design_tokens", {}))
+        
+        print("Camera AI generated a flawless UI Blueprint!")
+        return {"app_dna": app_dna, "design_tokens": design_tokens}
+        
+    except Exception as e:
+        print(f"Brain Error (Using Failsafe): {e}")
+        # Failsafe defaults so the app NEVER crashes
+        return {
+            "app_dna": AppDNA(
+                entity_name="Fallback Dashboard", 
+                required_components=[
+                    AppComponent(component_name="NavBar"), 
+                    AppComponent(component_name="DataGrid")
+                ]
+            ),
+            "design_tokens": DesignTokens(
+                accent_primary="#3B82F6", 
+                spacing_unit=8, 
+                motion_entrance="fade-in-up"
+            )
+        }
