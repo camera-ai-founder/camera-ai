@@ -5,12 +5,12 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16 & 17 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17 & 18 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
-    PathingIntent # <-- DAY 17 ADDITION
+    PathingIntent, LogicDNA, Route # <-- DAY 18 ADDITIONS
 )
 
 # ==========================================
@@ -504,4 +504,78 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
             entity_id=entity_id,
             start_coords=start_coords,
             target_coords=start_coords # Safe fallback: stay put
+        )
+
+# ==========================================
+# 12. DAY 18: THE BACKEND ARCHITECT DIRECTOR (FIXED TEMPLATE)
+# ==========================================
+def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
+    """
+    Asks the Groq AI to act as a Backend Architect.
+    It MUST fill out the LogicDNA form using EXACT key names.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return LogicDNA(
+            entity_name="Fallback",
+            routes=[Route(method="GET", path="/fallback")],
+            auth_type="None",
+            database_schema="Fallback schema"
+        )
+
+    print(f"Backend Architect is designing architecture for: '{entity_prompt}'...")
+    
+    system_prompt = """
+    You are the OGF Backend Architect. Your ONLY job is to design the architecture 
+    for a backend API by filling out a strict JSON form.
+    You MUST NOT write any Python code. You MUST NOT write any markdown.
+    You MUST output ONLY valid JSON.
+    """
+    
+    user_prompt = f"""
+    Design the backend architecture for this entity: {entity_prompt}
+    
+    You MUST use this EXACT JSON structure and key names:
+    {{
+      "entity_name": "User",
+      "routes": [
+        {{"method": "GET", "path": "/users"}},
+        {{"method": "POST", "path": "/users"}}
+      ],
+      "auth_type": "JWT",
+      "database_schema": "A table for users with id, name, and email."
+    }}
+    
+    Allowed HTTP methods for "method": "GET", "POST", "PUT", "DELETE", "PATCH"
+    Allowed auth types for "auth_type": "JWT", "OAuth", "API_Key", "Public", "None"
+    
+    Change the values to match the requested entity, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"}, 
+            temperature=0.1 # Keep it extremely strict and deterministic
+        )
+        
+        raw_json = response.choices[0].message.content
+        
+        # Pydantic acts as our bouncer. If the AI broke the rules, this catches it.
+        dna = LogicDNA.model_validate_json(raw_json)
+        print("Backend Architect generated a flawless LogicDNA!")
+        return dna
+        
+    except Exception as e:
+        print(f"[ERROR] The Architect Brain failed to fill out the form: {e}")
+        # Return a safe fallback so the compiler doesn't crash the app
+        return LogicDNA(
+            entity_name="Fallback",
+            routes=[Route(method="GET", path="/fallback")],
+            auth_type="None",
+            database_schema="Fallback schema"
         )

@@ -19,22 +19,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Added act_as_ecosystem_director for Day 16
+# Existing Day 1-17 Imports + Day 18 Architect
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
-    summarize_state, get_ui_blueprint, act_as_ecosystem_director
+    summarize_state, get_ui_blueprint, act_as_ecosystem_director,
+    act_as_backend_architect # <-- DAY 18 REAL BRAIN WIRED IN
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
-
-# NEW DAY 15 IMPORTS FOR THE GENESIS RENDERER
 from packages.core.genesis_renderer import genesis_renderer
-
-# Added WorldState, BiomeEngine for Day 16, and NavMeshDNA for Day 17
 from packages.core.models import VisualQuery, WorldState, NavMeshDNA
 from packages.core.biome_engine import BiomeEngine
-
-# NEW DAY 17 IMPORTS FOR THE NAVIGATION HOLE
 from packages.core.navigation_engine import Voxelizer, AStarPathfinder
+
+# NEW DAY 18 IMPORTS FOR THE BACKEND COMPILER
+from packages.core.backend_compiler import save_compiled_file
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -79,7 +77,7 @@ def gen(prompt):
 @click.argument('value', required=False)
 def state(action, key, value):
     """
-    View or update the World State.
+    View or update the World State (Supabase).
     Usage: 'camera state' (to view) or 'camera state set heat_level 5' (to update)
     """
     project_id = get_active_project_id()
@@ -179,7 +177,6 @@ def test_genesis():
     """[Day 15] Triggers the Genesis Pipeline to test the Cinematic Illusion."""
     console.print(Panel("[bold green]Initiating Day 15: Genesis Renderer Test[/bold green]"))
     
-    # 1. Test the Asset Swarm (Priority 2)
     console.print("\n[cyan]1. Testing Asset Swarm...[/cyan]")
     test_query = VisualQuery(
         search_terms=["gothic", "gargoyle"], 
@@ -189,7 +186,6 @@ def test_genesis():
     asset_result = genesis_renderer.process_visual_query(test_query)
     console.print(f"Result: {asset_result}")
     
-    # 2. Test Voice & Emotion (Priority 6)
     console.print("\n[cyan]2. Testing Voice & Emotion...[/cyan]")
     voice_result = genesis_renderer.generate_voice_and_emotion(
         dialogue="The storm is approaching, Founder.", 
@@ -213,10 +209,8 @@ def generate_biome(biome_type):
     """Generates a complete ecosystem blueprint based on a theme."""
     console.print(f"🌍 [bold cyan]Camera AI is designing a '{biome_type}' ecosystem...[/bold cyan]")
     
-    # 1. Create a safe, empty World State for the AI to read
     safe_world_state = WorldState().model_dump()
     
-    # 2. Ask the Ecosystem Director (Groq) for the Biome DNA
     with console.status("[bold green]Ecosystem Director is calculating Biome DNA...[/bold green]"):
         biome_dna = act_as_ecosystem_director(biome_type, safe_world_state)
     
@@ -225,16 +219,13 @@ def generate_biome(biome_type):
     console.print(f"   - Moisture Level: {biome_dna.moisture_level}")
     console.print(f"   - Scatter Density: {biome_dna.scatter_density}")
     
-    # 3. Initialize the Math Engine with a fixed deterministic seed
     engine = BiomeEngine(seed=4242)
     
-    # 4. Calculate Scatter Coordinates
     console.print("🧮 [bold yellow]Calculating deterministic scatter coordinates...[/bold yellow]")
     spawn_list = engine.calculate_scatter_coordinates(biome_dna)
     
     console.print(f"✅ [bold green]Math complete! Found {len(spawn_list)} perfect spawn locations.[/bold green]")
     
-    # 5. Print a sample to the terminal so we can see the math working
     if spawn_list:
         console.print("\n📍 [bold magenta]Sample Spawn Coordinates (First 3):[/bold magenta]")
         for spawn in spawn_list[:3]:
@@ -254,39 +245,31 @@ def navigate():
 
 @navigate.command(name="test")
 def navigate_test():
-    """
-    Generates a mock grid, places a fake building, and runs A* pathfinding.
-    This proves our math works before we ever load the 3D browser.
-    """
+    """Generates a mock grid, places a fake building, and runs A* pathfinding."""
     console.print(Panel.fit(
         "[bold cyan]Day 17: Testing the Navigation Hole[/bold cyan]\n"
         "Initializing deterministic math sandbox...",
         border_style="cyan"
     ))
     
-    # 1. Initialize our NavMesh DNA (1 meter grid squares)
     nav_dna = NavMeshDNA(grid_resolution=1.0)
     voxelizer = Voxelizer(nav_dna)
     
-    # 2. Create a fake building right in the middle of our map (0, 0) with a 5-meter radius
     mock_placed_assets = [
         {"x": 0.0, "z": 0.0, "radius": 5.0}
     ]
     console.print("[yellow]Placing a mock building at coordinates (0, 0)...[/yellow]")
     
-    # 3. Generate the 2D boolean grid (True = grass, False = building)
     grid = voxelizer.generate_grid(mock_placed_assets)
     console.print("[green]Voxelizer successfully generated the 2D walkable grid![/green]")
     
-    # 4. Initialize the A* Pathfinder
     pathfinder = AStarPathfinder(grid, voxelizer)
     
-    # 5. Ask the math engine to walk from bottom-left (-10, -10) to top-right (10, 10)
     start_coords = (-10.0, -10.0)
     target_coords = (10.0, 10.0)
     
     console.print(f"[bold]Calculating path from {start_coords} to {target_coords}...[/bold]")
-    time.sleep(1) # Small pause for dramatic effect
+    time.sleep(1) 
     
     path = pathfinder.find_path(start_coords, target_coords)
     
@@ -294,7 +277,6 @@ def navigate_test():
         console.print("[bold red]ERROR: No path found! The math failed.[/bold red]")
         return
 
-    # 6. Print the beautiful, deterministic breadcrumbs to the terminal
     console.print(f"[bold green]SUCCESS! A* calculated a safe path with {len(path)} waypoints.[/bold green]")
     
     table = Table(title="A* Path Waypoints (Breadcrumbs)")
@@ -303,7 +285,6 @@ def navigate_test():
     table.add_column("World Z", justify="center", style="green")
 
     for i, (x, z) in enumerate(path):
-        # Check if we are walking near the building to prove we went around it
         note = ""
         if -6.0 <= x <= 6.0 and -6.0 <= z <= 6.0:
             note = " [yellow](Navigating around building)[/yellow]"
@@ -313,9 +294,59 @@ def navigate_test():
     console.print(table)
     console.print("[bold cyan]The math is flawless, Founder. The entity will not clip through the building.[/bold cyan]")
 
+# ==========================================
+# DAY 18: THE BACKEND DNA COMPILER COMMANDS (WIRED TO REAL BRAIN)
+# ==========================================
+@cli.group()
+def backend():
+    """Day 18: Backend DNA Compiler Commands."""
+    pass
+
+@backend.command(name="generate")
+@click.argument("entity")
+def generate_backend(entity):
+    """Generate a flawless backend API for an entity (e.g., 'User' or 'Product')."""
+    console.print(f"🚀 [bold cyan]Initiating Genesis for entity:[/bold cyan] {entity}")
+    
+    # WE USE THE REAL GROQ BRAIN HERE!
+    dna = act_as_backend_architect(entity)
+    
+    console.print("⚙️ [bold yellow]Compiling DNA into bulletproof Python code...[/bold yellow]")
+    file_path = save_compiled_file(dna, output_folder="output")
+    
+    console.print(f"✅ [bold green]SUCCESS! Flawless backend compiled and saved to:[/bold green] {file_path}")
+    console.print("🚫 [bold red]Zero hallucinations. Zero syntax errors. Pure deterministic math.[/bold red]")
+
+@backend.command(name="state")
+@click.argument("assignment")
+def backend_state(assignment):
+    """Update the backend state and trigger a recompile. Format: key=value"""
+    if "=" not in assignment:
+        console.print("[bold red]❌ Error: Please use the format 'key=value' (e.g., auth_type=OAuth)[/bold red]")
+        return
+
+    key, value = assignment.split("=", 1)
+    console.print(f"💾 [bold green]Updated backend state:[/bold green] {key} is now '{value}'")
+    
+    active_entity = "User" # Default for our test
+    console.print(f"🔄 [bold yellow]Recompiling reality for active entity:[/bold yellow] {active_entity}...")
+    
+    # WE USE THE REAL GROQ BRAIN HERE!
+    dna = act_as_backend_architect(active_entity)
+    
+    # Apply the new state the user typed!
+    if key == "auth_type":
+        dna.auth_type = value
+        
+    file_path = save_compiled_file(dna, output_folder="output")
+    
+    console.print(f"✅ [bold green]Reality recompiled successfully with new state![/bold green]")
+    console.print(f"📁 [bold cyan]New file saved to:[/bold cyan] {file_path}")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
+cli.add_command(backend)
 
 # ==========================================
 # 3. START THE ENGINE

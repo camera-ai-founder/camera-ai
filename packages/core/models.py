@@ -197,3 +197,40 @@ class PathingIntent(BaseModel):
         ..., 
         description="The destination (x, z) coordinates in world space."
     )
+
+# ==========================================
+# DAY 18 MODELS: THE BACKEND DNA COMPILER
+# ==========================================
+
+class Route(BaseModel):
+    """Defines a single API endpoint, like GET /users"""
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = Field(
+        ..., 
+        description="The HTTP method for this route."
+    )
+    path: str = Field(
+        ..., 
+        description="The URL path, e.g., '/users', '/items/{id}'."
+    )
+
+class LogicDNA(BaseModel):
+    """
+    The DNA for our backend architecture. 
+    The Brain fills this out instead of hallucinating raw Python code.
+    """
+    entity_name: str = Field(
+        ..., 
+        description="The core entity name, e.g., 'User', 'Product', 'Project'."
+    )
+    routes: List[Route] = Field(
+        ..., 
+        description="A list of the API endpoints needed for this entity."
+    )
+    auth_type: Literal["JWT", "OAuth", "API_Key", "Public", "None"] = Field(
+        ..., 
+        description="The authentication method required for these routes."
+    )
+    database_schema: str = Field(
+        ..., 
+        description="A simple text description of the database tables and columns needed."
+    )

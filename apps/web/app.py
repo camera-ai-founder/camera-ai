@@ -101,5 +101,34 @@ def trigger_impact():
         "decay": juice.ragdoll_decay
     })
 
+# ==========================================
+# 6. DAY 18: THE LIVE CANVAS (SUPABASE REALTIME)
+# ==========================================
+@app.route('/api/live-canvas', methods=['POST'])
+def update_live_canvas():
+    """Receives state from the CLI and broadcasts it via Supabase Realtime."""
+    try:
+        # 1. Get the JSON data sent by the CLI
+        new_state = request.get_json()
+        
+        # 2. Push it to a Supabase table called 'live_canvas_state'
+        # We use 'upsert' (Update or Insert) so we always just have one master record (id=1)
+        response = supabase.table("live_canvas_state").upsert({
+            "id": 1, 
+            "data": new_state
+        }).execute()
+        
+        # 3. Because Supabase has Realtime enabled on this table, 
+        # the Web App will instantly receive this change without refreshing!
+        return jsonify({"status": "success", "message": "Live Canvas broadcasted!"}), 200
+        
+    except Exception as e:
+        # If the table doesn't exist yet, Supabase will throw an error.
+        # We catch it and print a friendly message so the app doesn't crash.
+        return jsonify({
+            "status": "error", 
+            "message": f"Could not broadcast. Please ensure the 'live_canvas_state' table exists in Supabase. Error: {str(e)}"
+        }), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
