@@ -16,12 +16,20 @@ console = Console()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from supabase import create_client
-from packages.core.brain import get_world_state, update_world_state, generate, summarize_state, get_ui_blueprint
+
+# Added act_as_ecosystem_director for Day 16
+from packages.core.brain import (
+    get_world_state, update_world_state, generate, 
+    summarize_state, get_ui_blueprint, act_as_ecosystem_director
+)
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 
 # NEW DAY 15 IMPORTS FOR THE GENESIS RENDERER
 from packages.core.genesis_renderer import genesis_renderer
-from packages.core.models import VisualQuery
+
+# Added WorldState and BiomeEngine for Day 16
+from packages.core.models import VisualQuery, WorldState
+from packages.core.biome_engine import BiomeEngine
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -185,6 +193,54 @@ def test_genesis():
     console.print(f"Result: {voice_result}")
     
     console.print("\n[bold green]✅ Genesis Pipeline Test Complete! The Cinematic Illusion Engine is ready.[/bold green]")
+
+# ==========================================
+# DAY 16: THE INFINITE BIOME ENGINE
+# ==========================================
+@cli.group()
+def biome():
+    """Commands for generating infinite mathematical biomes."""
+    pass
+
+@biome.command()
+@click.argument('biome_type')
+def generate(biome_type):
+    """Generates a complete ecosystem blueprint based on a theme."""
+    console.print(f"🌍 [bold cyan]Camera AI is designing a '{biome_type}' ecosystem...[/bold cyan]")
+    
+    # 1. Create a safe, empty World State for the AI to read
+    safe_world_state = WorldState().model_dump()
+    
+    # 2. Ask the Ecosystem Director (Groq) for the Biome DNA
+    with console.status("[bold green]Ecosystem Director is calculating Biome DNA...[/bold green]"):
+        biome_dna = act_as_ecosystem_director(biome_type, safe_world_state)
+    
+    console.print(f"✅ [bold green]Brain generated Biome:[/bold green] {biome_dna.name}")
+    console.print(f"   - Elevation Curve: {biome_dna.elevation_curve}")
+    console.print(f"   - Moisture Level: {biome_dna.moisture_level}")
+    console.print(f"   - Scatter Density: {biome_dna.scatter_density}")
+    
+    # 3. Initialize the Math Engine with a fixed deterministic seed
+    engine = BiomeEngine(seed=4242)
+    
+    # 4. Calculate Scatter Coordinates
+    console.print("🧮 [bold yellow]Calculating deterministic scatter coordinates...[/bold yellow]")
+    spawn_list = engine.calculate_scatter_coordinates(biome_dna)
+    
+    console.print(f"✅ [bold green]Math complete! Found {len(spawn_list)} perfect spawn locations.[/bold green]")
+    
+    # 5. Print a sample to the terminal so we can see the math working
+    if spawn_list:
+        console.print("\n📍 [bold magenta]Sample Spawn Coordinates (First 3):[/bold magenta]")
+        for spawn in spawn_list[:3]:
+            console.print(f"   -> Asset: {spawn['asset_type']} at X:{spawn['x']}, Y:{spawn['y']}, Z:{spawn['z']}")
+    else:
+        console.print("   [yellow](No assets spawned. The AI might have set the thresholds too high!)[/yellow]")
+        
+    console.print("\n🎉 [bold green]Ecosystem Blueprint generation complete![/bold green]")
+
+# CRITICAL: Add the new 'biome' group to the main 'cli' group!
+cli.add_command(biome)
 
 # ==========================================
 # 3. START THE ENGINE

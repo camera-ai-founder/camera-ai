@@ -149,3 +149,21 @@ class VFXProfile(BaseModel):
     fog_density: float = Field(0.0, description="Volumetric fog thickness (0.0 to 1.0).")
     rain_intensity: float = Field(0.0, description="Screen-space rain amount (0.0 to 1.0).")
     neon_reflection: float = Field(0.0, description="Wet street neon bounce intensity (0.0 to 1.0).")
+
+# ==========================================
+# DAY 16 MODELS: INFINITE BIOMES & SCATTER MATH
+# ==========================================
+
+class ScatterRule(BaseModel):
+    """Deterministic rules for placing Genesis assets based on environmental math."""
+    asset_type: str = Field(..., description="The specific Genesis asset to spawn (e.g., 'parametric_pine_tree', 'neon_shack').")
+    noise_threshold: float = Field(..., description="The minimum noise value (0.0 to 1.0) required to trigger this spawn.")
+    density_multiplier: float = Field(default=1.0, description="How heavily this asset populates when the threshold is met.")
+
+class BiomeDNA(BaseModel):
+    """The mathematical recipe for an ecosystem, preventing random object hallucinations."""
+    name: str = Field(..., description="The thematic name of the biome (e.g., 'Toxic Wasteland', 'High-Tech Forest').")
+    elevation_curve: float = Field(..., description="The base height of the terrain (0.0 is a deep trench, 1.0 is a mountain peak).")
+    moisture_level: float = Field(..., description="How wet the biome is (0.0 is dry/desert, 1.0 is dense/rainforest).")
+    scatter_density: float = Field(..., description="The overall tightness of the object packing (0.0 is sparse, 1.0 is highly dense).")
+    scatter_rules: List[ScatterRule] = Field(default_factory=list, description="The logical rules for placing Genesis assets based on the environment's math.")

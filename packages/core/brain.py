@@ -5,13 +5,11 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14 & 15 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15 & 16 IMPORTS: The Blueprints
 # ==========================================
-# Added AppDNA, AppComponent, and DesignTokens for Day 14
-# Added ParametricGenome, VisualQuery, CameraAction, VFXProfile for Day 15
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
-    ParametricGenome, VisualQuery, CameraAction, VFXProfile
+    ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA
 )
 
 # ==========================================
@@ -152,10 +150,6 @@ def generate(user_prompt: str):
 # 5. DAY 11: THE WORLD STATE MANAGER (Step 3 & Step 5)
 # ==========================================
 def get_world_state(project_id: str) -> WorldState:
-    """
-    The Librarian: Goes to Supabase, grabs the JSONB memory folder, 
-    and returns it as our WorldState Pydantic blueprint.
-    """
     if not supabase or not project_id:
         return WorldState()
 
@@ -173,10 +167,6 @@ def get_world_state(project_id: str) -> WorldState:
 
 
 def update_world_state(project_id: str, changes_dict: dict):
-    """
-    The Writer (DAY 11 STEP 5): Takes new game events, merges them 
-    into our World State, and saves the folder back to Supabase.
-    """
     if not supabase or not project_id:
         print("Cannot update world state: No Supabase or Project ID.")
         return
@@ -200,9 +190,6 @@ def update_world_state(project_id: str, changes_dict: dict):
 # 6. DAY 12: NARRATIVE IMPACT (The Juice Translator)
 # ==========================================
 def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the object") -> str:
-    """
-    Asks the Groq AI to turn our math (JuiceProfile) into a cool story description!
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return "The object hits something."
@@ -237,10 +224,6 @@ def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the objec
 # 7. DAY 13: THE NARRATIVE SUMMARIZER (Context Pruning)
 # ==========================================
 def summarize_state(raw_history_json: str) -> list:
-    """
-    TIER 2 BRAIN: Context Pruning.
-    Compresses massive game history into 3 simple 'World Truths' so the AI never forgets.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return ["The world is in an unknown state."]
@@ -283,10 +266,6 @@ Motion options: 'fade-in-up', 'scale-in'.
 """
 
 def get_ui_blueprint(user_request: str) -> dict:
-    """
-    DAY 14: Asks the Groq Brain for AppDNA and DesignTokens.
-    By forcing JSON mode, we mathematically prevent the AI from hallucinating code.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return None
@@ -354,14 +333,6 @@ def get_ui_blueprint(user_request: str) -> dict:
 # 9. DAY 15: THE GENESIS DIRECTOR (BRAIN UPGRADE)
 # ==========================================
 def generate_genesis_scene(scene_prompt: str) -> dict:
-    """
-    Forces the AI to act as the Genesis Director. 
-    It outputs strict Priority 1-6 JSON tags instead of hallucinating code.
-    """
-    # To fiercely protect your i3 laptop from API timeouts and rate limits 
-    # while we test the pipeline, we deterministically generate the perfect 
-    # mathematical blueprint right here. In production, this hits Groq JSON mode.
-    
     genome = ParametricGenome(
         seed=4096, 
         rules=["recursive_branch", "scale_down"], 
@@ -370,7 +341,7 @@ def generate_genesis_scene(scene_prompt: str) -> dict:
     
     visual_query = VisualQuery(
         search_terms=["cyberpunk", "neon", "building"], 
-        fallback_flag=False, # Math is enough for this test!
+        fallback_flag=False,
         max_poly_count=10000
     )
     
@@ -386,7 +357,6 @@ def generate_genesis_scene(scene_prompt: str) -> dict:
         neon_reflection=0.9
     )
     
-    # Return the flawless, hallucination-free JSON blueprint
     return {
         "scene_prompt": scene_prompt,
         "parametric_genome": genome.model_dump(),
@@ -394,3 +364,79 @@ def generate_genesis_scene(scene_prompt: str) -> dict:
         "camera_action": camera_action.model_dump(),
         "vfx_profile": vfx_profile.model_dump()
     }
+
+# ==========================================
+# 10. DAY 16: THE ECOSYSTEM DIRECTOR (Biome Math)
+# ==========================================
+def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
+    """
+    Upgrades the Brain to design cohesive, mathematical ecosystems.
+    Forces Groq to output strict BiomeDNA JSON using an exact template.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return BiomeDNA(
+            name="Fallback Plains", elevation_curve=0.5, moisture_level=0.5, 
+            scatter_density=0.5, scatter_rules=[]
+        )
+
+    print(f"Camera AI is designing an ecosystem for: '{user_prompt}'...")
+    
+    system_prompt = """
+    You are the Ecosystem Director for a deterministic 3D game engine. 
+    You DO NOT place objects randomly. You define environmental math and ScatterRules.
+    You must output ONLY valid JSON. No markdown, no explanations.
+    """
+    
+    # CRITICAL FIX: We give the AI the exact JSON skeleton to fill out.
+    # This prevents it from hallucinating wrong key names like "biome_name" or using dictionaries instead of lists.
+    user_message = f"""
+    Current World State: {world_state}
+    User Request: {user_prompt}
+    
+    Design the BiomeDNA. You MUST use this EXACT JSON structure and key names:
+    {{
+      "name": "Mystic Rainforest",
+      "elevation_curve": 0.4,
+      "moisture_level": 0.9,
+      "scatter_density": 0.8,
+      "scatter_rules": [
+        {{
+          "asset_type": "parametric_pine_tree",
+          "noise_threshold": 0.6,
+          "density_multiplier": 1.2
+        }},
+        {{
+          "asset_type": "ruined_shrine",
+          "noise_threshold": 0.2,
+          "density_multiplier": 0.5
+        }}
+      ]
+    }}
+    Change the values and asset types to match the User Request, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7 
+        )
+        
+        raw_json = response.choices[0].message.content
+        
+        # The Pydantic Bouncer catches any bad data here
+        biome_dna = BiomeDNA.model_validate_json(raw_json)
+        print("Camera AI generated a flawless Biome Blueprint!")
+        return biome_dna
+        
+    except Exception as e:
+        print(f"Brain Error (Using Failsafe): {e}")
+        return BiomeDNA(
+            name="Error Plains", elevation_curve=0.5, moisture_level=0.5, 
+            scatter_density=0.5, scatter_rules=[]
+        )
