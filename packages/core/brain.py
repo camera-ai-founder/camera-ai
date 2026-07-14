@@ -5,11 +5,12 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15 & 16 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16 & 17 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
-    ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA
+    ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
+    PathingIntent # <-- DAY 17 ADDITION
 )
 
 # ==========================================
@@ -388,8 +389,6 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
     You must output ONLY valid JSON. No markdown, no explanations.
     """
     
-    # CRITICAL FIX: We give the AI the exact JSON skeleton to fill out.
-    # This prevents it from hallucinating wrong key names like "biome_name" or using dictionaries instead of lists.
     user_message = f"""
     Current World State: {world_state}
     User Request: {user_prompt}
@@ -429,7 +428,6 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
         
         raw_json = response.choices[0].message.content
         
-        # The Pydantic Bouncer catches any bad data here
         biome_dna = BiomeDNA.model_validate_json(raw_json)
         print("Camera AI generated a flawless Biome Blueprint!")
         return biome_dna
@@ -439,4 +437,71 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
         return BiomeDNA(
             name="Error Plains", elevation_curve=0.5, moisture_level=0.5, 
             scatter_density=0.5, scatter_rules=[]
+        )
+
+# ==========================================
+# 11. DAY 17: THE TRAFFIC DIRECTOR (Navigation Intent)
+# ==========================================
+def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) -> PathingIntent:
+    """
+    The Traffic Director.
+    Forces the AI to output a strict PathingIntent JSON.
+    It decides WHERE the entity wants to go. The Math Engine will handle HOW.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return PathingIntent(
+            entity_id=entity_id,
+            start_coords=start_coords,
+            target_coords=start_coords # Safe fallback: stay put
+        )
+
+    print(f"Traffic Director is routing Entity '{entity_id}'...")
+
+    system_prompt = """
+    You are the Traffic Director for a deterministic 3D game engine.
+    Your ONLY job is to decide the destination coordinates (x, z) for an entity based on the narrative context.
+    You DO NOT write movement code. You DO NOT calculate physics. 
+    You MUST output ONLY valid JSON matching the PathingIntent schema.
+    """
+    
+    user_message = f"""
+    Entity ID: {entity_id}
+    Current Position (x, z): {start_coords}
+    Narrative Context: {context}
+    
+    Pick a logical destination (x, z) within the world bounds (-50.0 to 50.0).
+    You MUST use this EXACT JSON structure:
+    {{
+      "entity_id": "{entity_id}",
+      "start_coords": [{start_coords[0]}, {start_coords[1]}],
+      "target_coords": [10.5, -20.0] 
+    }}
+    Change the "target_coords" to fit the narrative context, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.4 
+        )
+        
+        raw_json = response.choices[0].message.content
+        
+        # The Pydantic Bouncer catches any bad data here
+        intent = PathingIntent.model_validate_json(raw_json)
+        print(f"Traffic Director issued PathingIntent to {intent.target_coords}!")
+        return intent
+        
+    except Exception as e:
+        print(f"Brain Error (Traffic Director Failsafe): {e}")
+        return PathingIntent(
+            entity_id=entity_id,
+            start_coords=start_coords,
+            target_coords=start_coords # Safe fallback: stay put
         )

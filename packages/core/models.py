@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional, Literal
+from typing import Dict, Any, List, Optional, Literal, Tuple
 
 # Our basic building blocks for the Ontological Brain
 class OntologicalNode(BaseModel):
@@ -167,3 +167,33 @@ class BiomeDNA(BaseModel):
     moisture_level: float = Field(..., description="How wet the biome is (0.0 is dry/desert, 1.0 is dense/rainforest).")
     scatter_density: float = Field(..., description="The overall tightness of the object packing (0.0 is sparse, 1.0 is highly dense).")
     scatter_rules: List[ScatterRule] = Field(default_factory=list, description="The logical rules for placing Genesis assets based on the environment's math.")
+
+# ==========================================
+# DAY 17 MODELS: THE NAVIGATION HOLE (PROCEDURAL PATHFINDING)
+# ==========================================
+
+class NavMeshDNA(BaseModel):
+    """The mathematical blueprint for our walkable terrain grid."""
+    grid_resolution: float = Field(
+        default=1.0, 
+        description="The size of each grid cell in world units (e.g., 1.0 means 1x1 meter squares)."
+    )
+    walkable_threshold: float = Field(
+        default=0.5, 
+        description="The maximum slope or obstacle height allowed for a cell to be marked 'walkable'."
+    )
+
+class PathingIntent(BaseModel):
+    """The AI's simple declaration of WHERE it wants to go. The math engine will figure out HOW."""
+    entity_id: str = Field(
+        ..., 
+        description="The unique ID of the entity that needs to move."
+    )
+    start_coords: Tuple[float, float] = Field(
+        ..., 
+        description="The starting (x, z) coordinates in world space."
+    )
+    target_coords: Tuple[float, float] = Field(
+        ..., 
+        description="The destination (x, z) coordinates in world space."
+    )

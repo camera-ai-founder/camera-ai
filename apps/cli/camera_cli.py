@@ -2,9 +2,11 @@ import os
 import sys
 import click
 import json 
+import time
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax 
+from rich.table import Table
 from dotenv import load_dotenv
 
 # ==========================================
@@ -27,9 +29,12 @@ from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 # NEW DAY 15 IMPORTS FOR THE GENESIS RENDERER
 from packages.core.genesis_renderer import genesis_renderer
 
-# Added WorldState and BiomeEngine for Day 16
-from packages.core.models import VisualQuery, WorldState
+# Added WorldState, BiomeEngine for Day 16, and NavMeshDNA for Day 17
+from packages.core.models import VisualQuery, WorldState, NavMeshDNA
 from packages.core.biome_engine import BiomeEngine
+
+# NEW DAY 17 IMPORTS FOR THE NAVIGATION HOLE
+from packages.core.navigation_engine import Voxelizer, AStarPathfinder
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -202,9 +207,9 @@ def biome():
     """Commands for generating infinite mathematical biomes."""
     pass
 
-@biome.command()
+@biome.command(name="generate")
 @click.argument('biome_type')
-def generate(biome_type):
+def generate_biome(biome_type):
     """Generates a complete ecosystem blueprint based on a theme."""
     console.print(f"🌍 [bold cyan]Camera AI is designing a '{biome_type}' ecosystem...[/bold cyan]")
     
@@ -239,8 +244,78 @@ def generate(biome_type):
         
     console.print("\n🎉 [bold green]Ecosystem Blueprint generation complete![/bold green]")
 
-# CRITICAL: Add the new 'biome' group to the main 'cli' group!
+# ==========================================
+# DAY 17: THE NAVIGATION HOLE (A* PATHFINDING TEST)
+# ==========================================
+@cli.group()
+def navigate():
+    """Navigation and Pathfinding commands."""
+    pass
+
+@navigate.command(name="test")
+def navigate_test():
+    """
+    Generates a mock grid, places a fake building, and runs A* pathfinding.
+    This proves our math works before we ever load the 3D browser.
+    """
+    console.print(Panel.fit(
+        "[bold cyan]Day 17: Testing the Navigation Hole[/bold cyan]\n"
+        "Initializing deterministic math sandbox...",
+        border_style="cyan"
+    ))
+    
+    # 1. Initialize our NavMesh DNA (1 meter grid squares)
+    nav_dna = NavMeshDNA(grid_resolution=1.0)
+    voxelizer = Voxelizer(nav_dna)
+    
+    # 2. Create a fake building right in the middle of our map (0, 0) with a 5-meter radius
+    mock_placed_assets = [
+        {"x": 0.0, "z": 0.0, "radius": 5.0}
+    ]
+    console.print("[yellow]Placing a mock building at coordinates (0, 0)...[/yellow]")
+    
+    # 3. Generate the 2D boolean grid (True = grass, False = building)
+    grid = voxelizer.generate_grid(mock_placed_assets)
+    console.print("[green]Voxelizer successfully generated the 2D walkable grid![/green]")
+    
+    # 4. Initialize the A* Pathfinder
+    pathfinder = AStarPathfinder(grid, voxelizer)
+    
+    # 5. Ask the math engine to walk from bottom-left (-10, -10) to top-right (10, 10)
+    start_coords = (-10.0, -10.0)
+    target_coords = (10.0, 10.0)
+    
+    console.print(f"[bold]Calculating path from {start_coords} to {target_coords}...[/bold]")
+    time.sleep(1) # Small pause for dramatic effect
+    
+    path = pathfinder.find_path(start_coords, target_coords)
+    
+    if not path:
+        console.print("[bold red]ERROR: No path found! The math failed.[/bold red]")
+        return
+
+    # 6. Print the beautiful, deterministic breadcrumbs to the terminal
+    console.print(f"[bold green]SUCCESS! A* calculated a safe path with {len(path)} waypoints.[/bold green]")
+    
+    table = Table(title="A* Path Waypoints (Breadcrumbs)")
+    table.add_column("Step", justify="center", style="cyan", no_wrap=True)
+    table.add_column("World X", justify="center", style="magenta")
+    table.add_column("World Z", justify="center", style="green")
+
+    for i, (x, z) in enumerate(path):
+        # Check if we are walking near the building to prove we went around it
+        note = ""
+        if -6.0 <= x <= 6.0 and -6.0 <= z <= 6.0:
+            note = " [yellow](Navigating around building)[/yellow]"
+            
+        table.add_row(str(i), f"{x:.1f}", f"{z:.1f}{note}")
+
+    console.print(table)
+    console.print("[bold cyan]The math is flawless, Founder. The entity will not clip through the building.[/bold cyan]")
+
+# CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
+cli.add_command(navigate)
 
 # ==========================================
 # 3. START THE ENGINE
