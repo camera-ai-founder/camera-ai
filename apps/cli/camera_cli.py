@@ -1,3 +1,4 @@
+# apps/cli/camera_cli.py
 import os
 import sys
 import click
@@ -29,7 +30,7 @@ from packages.core.brain import (
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
-from packages.core.models import VisualQuery, WorldState, NavMeshDNA, BiomeDNA 
+from packages.core.models import VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA
 from packages.core.biome_engine import BiomeEngine
 from packages.core.navigation_engine import Voxelizer, AStarPathfinder
 
@@ -38,6 +39,9 @@ from packages.core.deployment_engine import DeploymentEngine
 
 # --- DAY 21 ADDITION: The Deterministic Netcode Engine ---
 from packages.core.netcode_engine import NetcodeEngine
+
+# --- DAY 22 ADDITION: The Zero-Trust Security Engine ---
+from packages.core.security_engine import sanitize_dna
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -333,7 +337,7 @@ def backend_state(assignment):
     console.print(f"💾 [bold green]Updated backend state:[/bold green] {key} is now '{value}'")
     
     active_entity = "User" 
-    console.print(f"🔄 [bold yellow]Recompiling reality for active entity:[/bold yellow] {active_entity}...")
+    console.print(f" [bold yellow]Recompiling reality for active entity:[/bold yellow] {active_entity}...")
     
     dna = act_as_backend_architect(active_entity)
     
@@ -468,6 +472,74 @@ def netcode_sync():
     
     console.print("\n[bold green]✅ Netcode calculation complete![/bold green]")
     console.print("[bold cyan]Zero lag compensation. Zero heavy physics. Pure JSON DNA.[/bold cyan]")
+
+# ==========================================
+# DAY 22 STEP 6: CLI SECURITY AUDIT COMMAND
+# ==========================================
+@cli.command()
+@click.argument('file_path', type=click.Path(exists=True))
+def security_audit(file_path):
+    """
+    DAY 22: ZERO-TRUST DNA AUDIT.
+    Passes a JSON file through the Sanitizer to check for threats.
+    Usage: camera security_audit path/to/file.json
+    """
+    console.print(f"\n[bold cyan]️  Initiating Zero-Trust Security Audit...[/bold cyan]")
+    console.print(f"Target: {os.path.abspath(file_path)}\n")
+
+    try:
+        # 1. Read the raw file
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_json_string = f.read()
+
+        # 2. Define strict security rules for this audit
+        security_config = SecurityDNA(
+            max_payload_size=1048576, # 1MB limit
+            allowed_keys=[], # Let Pydantic's model definition handle the allowed keys
+            restricted_characters=["<", ">", ";", "--", "/*", "*/"]
+        )
+
+        # 3. Pass it through the Sanitizer (The Bouncer, The Scissors, The Vault)
+        # We use AppDNA as the target model because it contains the SecurityDNA strand
+        clean_dna = sanitize_dna(
+            raw_json_string=raw_json_string,
+            target_model=AppDNA,
+            security_config=security_config
+        )
+
+        # 4. SUCCESS: If it makes it here, the data is mathematically pure
+        console.print(Panel(
+            "[bold green]✅ DNA PURE[/bold green]\n\n"
+            "The payload passed all Zero-Trust checks.\n"
+            "- Size is within safe limits.\n"
+            "- No forbidden characters detected.\n"
+            "- Structure perfectly matches the Pydantic schema.\n"
+            "Your compilers are safe to process this data.",
+            title="SECURITY AUDIT PASSED",
+            border_style="green"
+        ))
+
+    except ValueError as e:
+        # 5. FAILURE: The Sanitizer caught a threat and raised a ValueError
+        error_message = str(e)
+        console.print(Panel(
+            f"[bold red]🚫 THREAT BLOCKED[/bold red]\n\n"
+            f"[yellow]Reason:[/yellow] {error_message}\n\n"
+            "The Sanitizer successfully neutralized a malicious or malformed payload.\n"
+            "Your laptop's memory and compilers were never exposed to this threat.",
+            title="SECURITY AUDIT FAILED",
+            border_style="red"
+        ))
+
+    except Exception as e:
+        # 6. UNEXPECTED ERROR: Failsafe for file reading issues, etc.
+        console.print(Panel(
+            f"[bold yellow]️ AUDIT ERROR[/bold yellow]\n\n"
+            f"An unexpected error occurred: {str(e)}\n"
+            "Please check the file path and ensure it is a valid text/JSON file.",
+            title="SYSTEM WARNING",
+            border_style="yellow"
+        ))
 
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)

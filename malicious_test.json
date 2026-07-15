@@ -1,0 +1,8 @@
+{
+  "app_name": "HackedApp<script>alert('XSS Attack')</script>",
+  "malicious_key": "This key is not allowed in our schema",
+  "design": {
+    "accent_primary": "NOT_A_HEX_CODE",
+    "spacing_unit": 999999999
+  }
+}

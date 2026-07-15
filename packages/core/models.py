@@ -1,17 +1,38 @@
+# packages/core/models.py
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional, Literal, Tuple
 from datetime import datetime
 
-# Our basic building blocks for the Ontological Brain
+# ==========================================
+# DAY 22 MODELS: THE SECURITY DNA (Zero-Trust Vault)
+# ==========================================
+class SecurityDNA(BaseModel):
+    """The mathematical vault rules to prevent memory overload and injection attacks."""
+    max_payload_size: int = Field(
+        1048576, 
+        description="Max payload size in bytes (1MB default to prevent memory attacks)"
+    )
+    allowed_keys: List[str] = Field(
+        default_factory=list, 
+        description="Explicitly allowed keys for strict parsing"
+    )
+    restricted_characters: List[str] = Field(
+        default_factory=lambda: ["<", ">", ";", "--", "/*", "*/"], 
+        description="Forbidden SQL/XSS injection characters"
+    )
+
+# ==========================================
+# OUR BASIC BUILDING BLOCKS
+# ==========================================
 class OntologicalNode(BaseModel):
-    id: str
-    name: str
-    type: str
+    id: str = Field(..., max_length=50)
+    name: str = Field(..., max_length=100)
+    type: str = Field(..., max_length=50)
 
 class Edge(BaseModel):
-    source: str
-    target: str
-    relationship: str
+    source: str = Field(..., max_length=50)
+    target: str = Field(..., max_length=50)
+    relationship: str = Field(..., max_length=50)
 
 class Graph(BaseModel):
     nodes: List[OntologicalNode] = []
@@ -21,7 +42,7 @@ class Graph(BaseModel):
 class WorldState(BaseModel):
     """The persistent memory of our game world."""
     heat_level: int = Field(default=0, description="The current heat/wanted level")
-    time_of_day: str = Field(default="12:00", description="In-game time")
+    time_of_day: str = Field(default="12:00", max_length=10, description="In-game time")
     extra_attributes: Dict[str, Any] = Field(default_factory=dict, description="Flexible storage for any other world events")
 
 # ==========================================
@@ -37,8 +58,8 @@ class ImpactVector(BaseModel):
 
 class JuiceProfile(BaseModel):
     """The visual flavor and decay rate of an impact."""
-    impact_type: str = "default" # e.g., "heavy_smash", "light_bounce", "glass_shatter"
-    ragdoll_decay: float = 0.5   # How fast the wobble fades out (0.0 to 1.0)
+    impact_type: str = Field("default", max_length=50) # e.g., "heavy_smash", "light_bounce"
+    ragdoll_decay: float = 0.5   
     impact_vector: Optional[ImpactVector] = None
 
 # ==========================================
@@ -46,82 +67,55 @@ class JuiceProfile(BaseModel):
 # ==========================================
 
 class MuscleParameters(BaseModel):
-    """
-    TIER 1: Fast, real-time physics parameters. 
-    The AI just sets these numbers, and JavaScript handles the actual movement.
-    """
+    """TIER 1: Fast, real-time physics parameters."""
     speed: float = Field(default=5.0, description="Movement speed of the entity.")
     gravity: float = Field(default=9.8, description="Gravity strength.")
     dodge_chance: float = Field(default=0.1, description="Probability to dodge attacks (0.0 to 1.0).")
     jump_force: float = Field(default=10.0, description="How high the entity jumps.")
 
 class BrainDirective(BaseModel):
-    """
-    TIER 2: Slow, narrative-level commands. 
-    The AI uses this to tell the game to do big, story-driven things.
-    """
-    action_type: str = Field(description="The high-level action, e.g., 'spawn_enemy', 'change_weather'.")
-    target: Optional[str] = Field(default=None, description="What the action applies to, e.g., 'player', 'forest'.")
+    """TIER 2: Slow, narrative-level commands."""
+    action_type: str = Field(..., max_length=50, description="The high-level action.")
+    target: Optional[str] = Field(default=None, max_length=50, description="What the action applies to.")
     intensity: int = Field(default=50, description="How strong the action is, from 1 to 100.")
 
-# ==========================================
-# DAY 13 STEP 4: THE DRAMA BUDGET GUARDRAILS
-# ==========================================
-
 class DramaBudget(BaseModel):
-    """
-    Mathematical guardrails to prevent the AI from crashing the browser 
-    with infinite spawns or excessive chaos.
-    """
-    max_entities: int = Field(
-        default=10, 
-        ge=1, le=50,
-        description="Absolute maximum number of new entities allowed to spawn this turn."
-    )
-    max_tension: int = Field(
-        default=50, 
-        ge=0, le=100, 
-        description="Tension level from 0 (calm) to 100 (pure chaos)."
-    )
-    max_projectiles: int = Field(
-        default=5, 
-        ge=0, le=20, 
-        description="Maximum number of active projectiles allowed on screen."
-    )
+    """Mathematical guardrails to prevent the AI from crashing the browser."""
+    max_entities: int = Field(default=10, ge=1, le=50, description="Absolute max entities.")
+    max_tension: int = Field(default=50, ge=0, le=100, description="Tension level 0-100.")
+    max_projectiles: int = Field(default=5, ge=0, le=20, description="Max active projectiles.")
 
 class TwoTierOutput(BaseModel):
-    """
-    The master output schema. We will force Groq to always return this exact JSON structure.
-    """
+    """The master output schema for Groq."""
     muscle_params: MuscleParameters = Field(description="Settings for the fast physics engine.")
-    brain_directives: List[BrainDirective] = Field(
-        default_factory=list, 
-        description="A list of high-level narrative commands for the game engine to process."
-    )
-    drama_budget: DramaBudget = Field(
-        default_factory=DramaBudget,
-        description="Strict limits on how much chaos the AI is allowed to generate."
-    )
+    brain_directives: List[BrainDirective] = Field(default_factory=list)
+    drama_budget: DramaBudget = Field(default_factory=DramaBudget)
 
 # ==========================================
 # DAY 14 MODELS: APP DNA & DESIGN TOKENS
 # ==========================================
 
 class DesignTokens(BaseModel):
-    """The visual and motion DNA of the generated UI. The AI must fill this out."""
-    accent_primary: str = Field(..., description="Hex code for the primary brand color, e.g., '#3B82F6'")
-    spacing_unit: int = Field(..., description="Base padding/margin multiplier in pixels, usually 4 or 8")
-    motion_entrance: str = Field(..., description="Framer Motion entrance animation type, e.g., 'fade-in-up' or 'scale-in'")
+    """The visual and motion DNA of the generated UI."""
+    accent_primary: str = Field(..., max_length=20, description="Hex code for the primary brand color.")
+    spacing_unit: int = Field(..., description="Base padding/margin multiplier in pixels.")
+    motion_entrance: str = Field(..., max_length=50, description="Framer Motion entrance animation type.")
 
 class AppComponent(BaseModel):
     """A single pre-audited component required for the app."""
-    component_name: str = Field(..., description="The exact name of the component from our Template Vault, e.g., 'NavBar' or 'DataGrid'")
-    props: Dict[str, Any] = Field(default_factory=dict, description="Specific properties to pass to the component.")
+    component_name: str = Field(..., max_length=50, description="The exact name of the component.")
+    props: Dict[str, Any] = Field(default_factory=dict)
 
 class AppDNA(BaseModel):
     """The structural DNA of the requested application."""
-    entity_name: str = Field(..., description="The name of the core entity this app manages, e.g., 'User Dashboard'")
-    required_components: List[AppComponent] = Field(..., description="Ordered list of components needed to render this app.")
+    entity_name: str = Field(..., max_length=100, description="The name of the core entity.")
+    required_components: List[AppComponent] = Field(...)
+    
+    # DAY 22 ADDITION: The Security DNA strand
+    security: SecurityDNA = Field(
+        default_factory=SecurityDNA, 
+        description="The Zero-Trust security rules for this app."
+    )
 
 # ==========================================
 # DAY 15 MODELS: THE GENESIS RENDERER (PILLAR 11)
@@ -129,161 +123,101 @@ class AppDNA(BaseModel):
 
 class ParametricGenome(BaseModel):
     """Priority 1: The mathematical DNA to grow 3D objects using pure math."""
-    seed: int = Field(..., description="A deterministic math seed (0-9999) to grow the exact same shape every time.")
-    rules: List[str] = Field(default_factory=list, description="L-System rules or CSG operations to grow the topology.")
-    scale_factor: float = Field(1.0, description="Global scale multiplier for the generated math object.")
+    seed: int = Field(...)
+    rules: List[str] = Field(default_factory=list)
+    scale_factor: float = Field(1.0)
 
 class VisualQuery(BaseModel):
     """Priority 2: The search parameters for our CC0 Asset Swarm fallback."""
-    search_terms: List[str] = Field(..., description="Keywords to search the CC0 asset API (e.g., ['gothic', 'gargoyle']).")
-    fallback_flag: bool = Field(False, description="True if parametric math is insufficient and we MUST download a 3D model.")
-    max_poly_count: int = Field(10000, description="Hard limit for downloaded assets to protect the browser RAM.")
+    search_terms: List[str] = Field(...)
+    fallback_flag: bool = Field(False)
+    max_poly_count: int = Field(10000)
 
 class CameraAction(BaseModel):
     """Priority 4: The AI Cinematographer's deterministic camera movements."""
     movement_type: Literal["static", "shaky_cam", "orbit", "dolly_zoom", "tracking"] = Field("static")
-    duration_seconds: float = Field(3.0, description="How long the camera movement lasts.")
-    intensity: float = Field(1.0, description="Strength of the camera effect (e.g., how violent the shaky_cam is).")
+    duration_seconds: float = Field(3.0)
+    intensity: float = Field(1.0)
 
 class VFXProfile(BaseModel):
     """Priority 5: Mathematical parameters for cinematic post-processing effects."""
-    fog_density: float = Field(0.0, description="Volumetric fog thickness (0.0 to 1.0).")
-    rain_intensity: float = Field(0.0, description="Screen-space rain amount (0.0 to 1.0).")
-    neon_reflection: float = Field(0.0, description="Wet street neon bounce intensity (0.0 to 1.0).")
+    fog_density: float = Field(0.0)
+    rain_intensity: float = Field(0.0)
+    neon_reflection: float = Field(0.0)
 
 # ==========================================
 # DAY 16 MODELS: INFINITE BIOMES & SCATTER MATH
 # ==========================================
 
 class ScatterRule(BaseModel):
-    """Deterministic rules for placing Genesis assets based on environmental math."""
-    asset_type: str = Field(..., description="The specific Genesis asset to spawn (e.g., 'parametric_pine_tree', 'neon_shack').")
-    noise_threshold: float = Field(..., description="The minimum noise value (0.0 to 1.0) required to trigger this spawn.")
-    density_multiplier: float = Field(default=1.0, description="How heavily this asset populates when the threshold is met.")
+    """Deterministic rules for placing Genesis assets."""
+    asset_type: str = Field(..., max_length=100)
+    noise_threshold: float = Field(...)
+    density_multiplier: float = Field(default=1.0)
 
 class BiomeDNA(BaseModel):
-    """The mathematical recipe for an ecosystem, preventing random object hallucinations."""
-    name: str = Field(..., description="The thematic name of the biome (e.g., 'Toxic Wasteland', 'High-Tech Forest').")
-    elevation_curve: float = Field(..., description="The base height of the terrain (0.0 is a deep trench, 1.0 is a mountain peak).")
-    moisture_level: float = Field(..., description="How wet the biome is (0.0 is dry/desert, 1.0 is dense/rainforest).")
-    scatter_density: float = Field(..., description="The overall tightness of the object packing (0.0 is sparse, 1.0 is highly dense).")
-    scatter_rules: List[ScatterRule] = Field(default_factory=list, description="The logical rules for placing Genesis assets based on the environment's math.")
+    """The mathematical recipe for an ecosystem."""
+    name: str = Field(..., max_length=50)
+    elevation_curve: float = Field(...)
+    moisture_level: float = Field(...)
+    scatter_density: float = Field(...)
+    scatter_rules: List[ScatterRule] = Field(default_factory=list)
 
 # ==========================================
-# DAY 17 MODELS: THE NAVIGATION HOLE (PROCEDURAL PATHFINDING)
+# DAY 17 MODELS: THE NAVIGATION HOLE 
 # ==========================================
 
 class NavMeshDNA(BaseModel):
     """The mathematical blueprint for our walkable terrain grid."""
-    grid_resolution: float = Field(
-        default=1.0, 
-        description="The size of each grid cell in world units (e.g., 1.0 means 1x1 meter squares)."
-    )
-    walkable_threshold: float = Field(
-        default=0.5, 
-        description="The maximum slope or obstacle height allowed for a cell to be marked 'walkable'."
-    )
+    grid_resolution: float = Field(default=1.0)
+    walkable_threshold: float = Field(default=0.5)
 
 class PathingIntent(BaseModel):
-    """The AI's simple declaration of WHERE it wants to go. The math engine will figure out HOW."""
-    entity_id: str = Field(
-        ..., 
-        description="The unique ID of the entity that needs to move."
-    )
-    start_coords: Tuple[float, float] = Field(
-        ..., 
-        description="The starting (x, z) coordinates in world space."
-    )
-    target_coords: Tuple[float, float] = Field(
-        ..., 
-        description="The destination (x, z) coordinates in world space."
-    )
+    """The AI's simple declaration of WHERE it wants to go."""
+    entity_id: str = Field(..., max_length=50)
+    start_coords: Tuple[float, float] = Field(...)
+    target_coords: Tuple[float, float] = Field(...)
 
 # ==========================================
 # DAY 18 MODELS: THE BACKEND DNA COMPILER
 # ==========================================
 
 class Route(BaseModel):
-    """Defines a single API endpoint, like GET /users"""
-    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = Field(
-        ..., 
-        description="The HTTP method for this route."
-    )
-    path: str = Field(
-        ..., 
-        description="The URL path, e.g., '/users', '/items/{id}'."
-    )
+    """Defines a single API endpoint."""
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = Field(...)
+    path: str = Field(..., max_length=200)
 
 class LogicDNA(BaseModel):
-    """
-    The DNA for our backend architecture. 
-    The Brain fills this out instead of hallucinating raw Python code.
-    """
-    entity_name: str = Field(
-        ..., 
-        description="The core entity name, e.g., 'User', 'Product', 'Project'."
-    )
-    routes: List[Route] = Field(
-        ..., 
-        description="A list of the API endpoints needed for this entity."
-    )
-    auth_type: Literal["JWT", "OAuth", "API_Key", "Public", "None"] = Field(
-        ..., 
-        description="The authentication method required for these routes."
-    )
-    database_schema: str = Field(
-        ..., 
-        description="A simple text description of the database tables and columns needed."
-    )
+    """The DNA for our backend architecture."""
+    entity_name: str = Field(..., max_length=100)
+    routes: List[Route] = Field(...)
+    auth_type: Literal["JWT", "OAuth", "API_Key", "Public", "None"] = Field(...)
+    database_schema: str = Field(..., max_length=2000)
 
 # ==========================================
 # DAY 20 MODELS: THE DEPLOYMENT DNA
 # ==========================================
 
 class DeployDNA(BaseModel):
-    """
-    The Deployment DNA. Forces the Brain to define the deployment topology 
-    structurally, rather than hallucinating raw bash scripts or Dockerfiles.
-    """
-    target_environment: str = Field(..., description="The deployment target, e.g., 'docker', 'render', 'railway', 'edge_function'.")
-    port_mappings: Dict[int, int] = Field(default_factory=dict, description="Mapping of internal app ports to external host ports, e.g., {8080: 80}.")
-    env_variables: Dict[str, str] = Field(default_factory=dict, description="Environment variables required for the build and runtime.")
-    asset_cdn_url: Optional[str] = Field(None, description="Optional CDN URL if heavy visual assets are offloaded to external storage.")
+    """The Deployment DNA."""
+    target_environment: str = Field(..., max_length=50)
+    port_mappings: Dict[int, int] = Field(default_factory=dict)
+    env_variables: Dict[str, str] = Field(default_factory=dict)
+    asset_cdn_url: Optional[str] = Field(None, max_length=500)
 
 # ==========================================
-# DAY 21 MODELS: THE MULTIPLAYER HOLE (DETERMINISTIC NETCODE)
+# DAY 21 MODELS: THE MULTIPLAYER HOLE 
 # ==========================================
 
 class NetworkDNA(BaseModel):
-    """The rulebook for how this specific world communicates over the network."""
-    sync_rate_hz: float = Field(
-        default=10.0, 
-        description="How many times per second we calculate and broadcast deltas."
-    )
-    authoritative_source: str = Field(
-        default="server", 
-        description="Who is the ultimate source of truth? (server, client_host, etc.)"
-    )
-    max_delta_size_kb: int = Field(
-        default=50, 
-        description="Max size of a delta payload before we force a full state sync."
-    )
+    """The rulebook for how this specific world communicates."""
+    sync_rate_hz: float = Field(default=10.0)
+    authoritative_source: str = Field(default="server", max_length=50)
+    max_delta_size_kb: int = Field(default=50)
 
 class StateDelta(BaseModel):
-    """The exact mathematical difference between two world states. The ultimate bandwidth saver."""
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, 
-        description="The exact time this change occurred."
-    )
-    changed_nodes: List[Dict[str, Any]] = Field(
-        default_factory=list, 
-        description="Only the specific nodes that were added or modified."
-    )
-    changed_tokens: Dict[str, Any] = Field(
-        default_factory=dict, 
-        description="Only the design tokens that changed (e.g., lighting, colors)."
-    )
-    removed_node_ids: List[str] = Field(
-        default_factory=list, 
-        description="IDs of nodes that were deleted from the world."
-    )
+    """The exact mathematical difference between two world states."""
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    changed_nodes: List[Dict[str, Any]] = Field(default_factory=list)
+    changed_tokens: Dict[str, Any] = Field(default_factory=dict)
+    removed_node_ids: List[str] = Field(default_factory=list)

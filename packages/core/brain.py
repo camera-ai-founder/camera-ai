@@ -1,3 +1,4 @@
+# packages/core/brain.py
 import os
 import json
 from dotenv import load_dotenv
@@ -10,8 +11,22 @@ from supabase import create_client, Client
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
-    PathingIntent, LogicDNA, Route, DeployDNA, StateDelta # <-- DAY 21 ADDITION
+    PathingIntent, LogicDNA, Route, DeployDNA, StateDelta, SecurityDNA
 )
+
+# ==========================================
+# DAY 22 STEP 5: THE SECURITY GUARDRAILS
+# ==========================================
+SECURITY_GUARDRAILS_PROMPT = """
+=== CRITICAL SECURITY DNA RULES ===
+You are operating within a Zero-Trust architecture. You MUST strictly obey these mathematical limits when generating JSON DNA:
+1. STRING LIMITS: Never generate a string longer than 2,000 characters. Keep descriptions concise.
+2. PAYLOAD SIZE: The total JSON output must be under 1MB. Do not generate massive arrays or redundant data.
+3. FORBIDDEN CHARACTERS: NEVER use these characters in any string values: <, >, ;, --, /*, */. Use plain text only.
+4. STRICT SCHEMA: Only output the exact keys defined in the Pydantic models. Do not invent new keys or hallucinate extra fields.
+5. NUMERICAL BOUNDS: Respect all 'ge' (greater than or equal to) and 'le' (less than or equal to) limits. Tension must be 0-100, etc.
+If you violate these rules, the Sanitizer will block your output. Generate clean, safe, and perfectly bounded JSON.
+"""
 
 # ==========================================
 # 2. LOAD SECRETS FIRST 
@@ -124,7 +139,10 @@ def generate(user_prompt: str):
     {project_memory}
 
     Based on this memory, the game state, the World Truths, and their new request, generate the hierarchical JSON.
-    Do not output markdown or anything else."""
+    Do not output markdown or anything else.
+
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
 
     try:
         response = client.chat.completions.create(
@@ -205,6 +223,8 @@ def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the objec
     The raw force applied was: {force} units.
     
     Make it sound intense and juicy!
+    
+    {SECURITY_GUARDRAILS_PROMPT}
     """
 
     try:
@@ -239,6 +259,8 @@ def summarize_state(raw_history_json: str) -> list:
     
     You MUST return ONLY a JSON object with a key called "truths" that contains a list of 3 strings.
     Example format: {{ "truths": ["The king is dead.", "The player has the sword.", "It is raining."] }}
+
+    {SECURITY_GUARDRAILS_PROMPT}
     """
     
     try:
@@ -258,12 +280,14 @@ def summarize_state(raw_history_json: str) -> list:
 # ==========================================
 # 8. DAY 14: FORCING THE UI BLUEPRINTS (The SaaS Killer)
 # ==========================================
-UI_SYSTEM_PROMPT = """
+UI_SYSTEM_PROMPT = f"""
 You are the Camera AI UI Architect. 
 You DO NOT write React code, HTML, or CSS. You ONLY output structured JSON.
 Your job is to select components from our Vault and define visual tokens.
 Available Vault Components: 'NavBar', 'DataGrid'.
 Motion options: 'fade-in-up', 'scale-in'.
+
+{SECURITY_GUARDRAILS_PROMPT}
 """
 
 def get_ui_blueprint(user_request: str) -> dict:
@@ -383,10 +407,12 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
 
     print(f"Camera AI is designing an ecosystem for: '{user_prompt}'...")
     
-    system_prompt = """
+    system_prompt = f"""
     You are the Ecosystem Director for a deterministic 3D game engine. 
     You DO NOT place objects randomly. You define environmental math and ScatterRules.
     You must output ONLY valid JSON. No markdown, no explanations.
+
+    {SECURITY_GUARDRAILS_PROMPT}
     """
     
     user_message = f"""
@@ -458,11 +484,13 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
 
     print(f"Traffic Director is routing Entity '{entity_id}'...")
 
-    system_prompt = """
+    system_prompt = f"""
     You are the Traffic Director for a deterministic 3D game engine.
     Your ONLY job is to decide the destination coordinates (x, z) for an entity based on the narrative context.
     You DO NOT write movement code. You DO NOT calculate physics. 
     You MUST output ONLY valid JSON matching the PathingIntent schema.
+
+    {SECURITY_GUARDRAILS_PROMPT}
     """
     
     user_message = f"""
@@ -525,11 +553,13 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
 
     print(f"Backend Architect is designing architecture for: '{entity_prompt}'...")
     
-    system_prompt = """
+    system_prompt = f"""
     You are the OGF Backend Architect. Your ONLY job is to design the architecture 
     for a backend API by filling out a strict JSON form.
     You MUST NOT write any Python code. You MUST NOT write any markdown.
     You MUST output ONLY valid JSON.
+
+    {SECURITY_GUARDRAILS_PROMPT}
     """
     
     user_prompt = f"""
@@ -600,7 +630,7 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
 
     print("DevOps Director is determining deployment topology...")
     
-    system_prompt = """
+    system_prompt = f"""
     You are the DevOps Director for the Ontological Genesis Framework.
     Your job is to determine the exact deployment topology based on the 
     current World State and application complexity.
@@ -609,6 +639,8 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
     
     Example target environments: 'docker', 'render', 'railway'.
     Remember to include necessary env variables like SUPABASE_URL if it's a web app.
+
+    {SECURITY_GUARDRAILS_PROMPT}
     """
     
     user_prompt = f"""
@@ -674,7 +706,7 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
     # We create a strict system prompt using our Pydantic schema's JSON structure
     delta_schema = StateDelta.model_json_schema()
     
-    system_prompt = """
+    system_prompt = f"""
     You are the Multiplayer Director for a deterministic game engine.
     Your job is to calculate the exact mathematical difference (the StateDelta) that needs to be broadcast to all other players.
     Do NOT write any code. Do NOT explain your reasoning. 
@@ -682,6 +714,8 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
     If a node was changed or added, put it in 'changed_nodes'.
     If a node was destroyed, put its ID in 'removed_node_ids'.
     If a global variable changed (like time of day or heat level), put it in 'changed_tokens'.
+
+    {SECURITY_GUARDRAILS_PROMPT}
     """
     
     user_prompt = f"""
