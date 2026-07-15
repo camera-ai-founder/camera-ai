@@ -5,12 +5,12 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18 & 20 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20 & 21 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
-    PathingIntent, LogicDNA, Route, DeployDNA # <-- DAY 20 ADDITION
+    PathingIntent, LogicDNA, Route, DeployDNA, StateDelta # <-- DAY 21 ADDITION
 )
 
 # ==========================================
@@ -654,3 +654,66 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
             env_variables={},
             asset_cdn_url=None
         )
+
+# ==========================================
+# 14. DAY 21: THE MULTIPLAYER DIRECTOR (BRAIN UPGRADE)
+# ==========================================
+def generate_multiplayer_intent(action_description: str, current_world_state: dict) -> StateDelta:
+    """
+    The Day 21 Magic. 
+    We tell the Brain what happened in plain English. 
+    The Brain acts as the Multiplayer Director and outputs a pure, mathematical StateDelta.
+    It doesn't write network code; it just fills out the Delta form!
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return StateDelta() # Fallback empty delta
+
+    print(f"Multiplayer Director is analyzing intent for: '{action_description}'...")
+    
+    # We create a strict system prompt using our Pydantic schema's JSON structure
+    delta_schema = StateDelta.model_json_schema()
+    
+    system_prompt = """
+    You are the Multiplayer Director for a deterministic game engine.
+    Your job is to calculate the exact mathematical difference (the StateDelta) that needs to be broadcast to all other players.
+    Do NOT write any code. Do NOT explain your reasoning. 
+    You MUST output ONLY valid JSON that strictly matches the provided schema.
+    If a node was changed or added, put it in 'changed_nodes'.
+    If a node was destroyed, put its ID in 'removed_node_ids'.
+    If a global variable changed (like time of day or heat level), put it in 'changed_tokens'.
+    """
+    
+    user_prompt = f"""
+    The current world state is: {json.dumps(current_world_state, indent=2)}
+    
+    A player just performed this action: "{action_description}"
+    
+    Calculate the StateDelta. You MUST use this EXACT JSON structure:
+    {json.dumps(delta_schema, indent=2)}
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1 # Keep it very low for strict math and JSON adherence
+        )
+        
+        raw_json_string = response.choices[0].message.content
+        
+        # Parse the raw JSON string into a Python dictionary
+        raw_dict = json.loads(raw_json_string)
+        
+        # Force it through our Pydantic Bouncer
+        validated_delta = StateDelta(**raw_dict)
+        print("Multiplayer Director generated a flawless StateDelta!")
+        return validated_delta
+        
+    except Exception as e:
+        print(f"Brain Error (Multiplayer Director Failsafe): {e}")
+        return StateDelta()

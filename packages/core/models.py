@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional, Literal, Tuple
+from datetime import datetime
 
 # Our basic building blocks for the Ontological Brain
 class OntologicalNode(BaseModel):
@@ -248,3 +249,41 @@ class DeployDNA(BaseModel):
     port_mappings: Dict[int, int] = Field(default_factory=dict, description="Mapping of internal app ports to external host ports, e.g., {8080: 80}.")
     env_variables: Dict[str, str] = Field(default_factory=dict, description="Environment variables required for the build and runtime.")
     asset_cdn_url: Optional[str] = Field(None, description="Optional CDN URL if heavy visual assets are offloaded to external storage.")
+
+# ==========================================
+# DAY 21 MODELS: THE MULTIPLAYER HOLE (DETERMINISTIC NETCODE)
+# ==========================================
+
+class NetworkDNA(BaseModel):
+    """The rulebook for how this specific world communicates over the network."""
+    sync_rate_hz: float = Field(
+        default=10.0, 
+        description="How many times per second we calculate and broadcast deltas."
+    )
+    authoritative_source: str = Field(
+        default="server", 
+        description="Who is the ultimate source of truth? (server, client_host, etc.)"
+    )
+    max_delta_size_kb: int = Field(
+        default=50, 
+        description="Max size of a delta payload before we force a full state sync."
+    )
+
+class StateDelta(BaseModel):
+    """The exact mathematical difference between two world states. The ultimate bandwidth saver."""
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, 
+        description="The exact time this change occurred."
+    )
+    changed_nodes: List[Dict[str, Any]] = Field(
+        default_factory=list, 
+        description="Only the specific nodes that were added or modified."
+    )
+    changed_tokens: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Only the design tokens that changed (e.g., lighting, colors)."
+    )
+    removed_node_ids: List[str] = Field(
+        default_factory=list, 
+        description="IDs of nodes that were deleted from the world."
+    )

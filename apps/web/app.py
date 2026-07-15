@@ -1,11 +1,16 @@
 import os
+import json
+from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, render_template, jsonify, request
 from supabase import create_client, Client
 
 # --- DAY 12 IMPORTS: The Juice Engine & Brain ---
-from packages.core.models import ImpactVector, JuiceProfile
+from packages.core.models import ImpactVector, JuiceProfile, StateDelta
 from packages.core import brain
+
+# --- DAY 21 IMPORT: The Deterministic Netcode Engine ---
+from packages.core.netcode_engine import NetcodeEngine
 
 # --- 0. LOAD THE .ENV FILE ---
 load_dotenv()
@@ -17,6 +22,23 @@ supabase = create_client(url, key)
 
 # --- 2. SETUP FLASK ---
 app = Flask(__name__)
+
+# ==========================================
+# DAY 21: STATE MANAGEMENT HELPERS
+# ==========================================
+STATE_FILE_PATH = "OGF_STATE.json"
+
+def load_current_state() -> dict:
+    """Reads the current master state from our JSON DNA file."""
+    if not os.path.exists(STATE_FILE_PATH):
+        return {"nodes": [], "world_state": {}}
+    with open(STATE_FILE_PATH, "r") as f:
+        return json.load(f)
+
+def save_current_state(state: dict):
+    """Saves the updated master state back to our JSON DNA file."""
+    with open(STATE_FILE_PATH, "w") as f:
+        json.dump(state, f, indent=4)
 
 # --- 3. MAIN WEB PAGE ROUTE ---
 @app.route('/')
@@ -128,6 +150,58 @@ def update_live_canvas():
         return jsonify({
             "status": "error", 
             "message": f"Could not broadcast. Please ensure the 'live_canvas_state' table exists in Supabase. Error: {str(e)}"
+        }), 500
+
+# ==========================================
+# 7. DAY 21: DETERMINISTIC NETCODE BROADCAST
+# ==========================================
+@app.route('/api/update_state', methods=['POST'])
+def update_state():
+    """
+    THE REALTIME DELTA BROADCAST HOOK.
+    The CLI or Brain sends the NEW full state here.
+    We calculate the surgical Delta using pure math,
+    then broadcast ONLY the Delta via Supabase Realtime.
+    """
+    try:
+        # 1. Get the incoming new state from the request
+        new_state_data = request.get_json()
+        
+        if not new_state_data:
+            return jsonify({"status": "error", "message": "No JSON data provided"}), 400
+        
+        # 2. Load the old state from our master JSON DNA file
+        old_state_data = load_current_state()
+        
+        # 3. THE MATH DIFFING — calculate exactly what changed
+        delta: StateDelta = NetcodeEngine.calculate_delta(old_state_data, new_state_data)
+        
+        # 4. Save the new state as our new master truth
+        save_current_state(new_state_data)
+        
+        # 5. Convert Pydantic model to pure JSON dictionary
+        delta_payload = delta.model_dump(mode='json')
+        
+        # 6. BROADCAST ONLY THE DELTA to Supabase
+        # Inserting into 'state_deltas' triggers Supabase Realtime to push 
+        # this tiny payload to all connected clients instantly!
+        supabase.table("state_deltas").insert({
+            "delta_data": delta_payload,
+            "timestamp": delta_payload["timestamp"]
+        }).execute()
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Delta calculated and broadcasted via Supabase Realtime!",
+            "changed_nodes_count": len(delta_payload["changed_nodes"]),
+            "changed_tokens_count": len(delta_payload["changed_tokens"]),
+            "removed_nodes_count": len(delta_payload["removed_node_ids"])
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": f"Could not broadcast delta. Please ensure the 'state_deltas' table exists in Supabase with Realtime enabled. Error: {str(e)}"
         }), 500
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@ import sys
 import click
 import json 
 import time
+import copy
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax 
@@ -34,6 +35,9 @@ from packages.core.navigation_engine import Voxelizer, AStarPathfinder
 
 from packages.core.backend_compiler import save_compiled_file
 from packages.core.deployment_engine import DeploymentEngine 
+
+# --- DAY 21 ADDITION: The Deterministic Netcode Engine ---
+from packages.core.netcode_engine import NetcodeEngine
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -228,7 +232,7 @@ def generate_biome(biome_type):
     console.print(f"✅ [bold green]Math complete! Found {len(spawn_list)} perfect spawn locations.[/bold green]")
     
     if spawn_list:
-        console.print("\n📍 [bold magenta]Sample Spawn Coordinates (First 3):[/bold magenta]")
+        console.print("\n [bold magenta]Sample Spawn Coordinates (First 3):[/bold magenta]")
         for spawn in spawn_list[:3]:
             console.print(f"   -> Asset: {spawn['asset_type']} at X:{spawn['x']}, Y:{spawn['y']}, Z:{spawn['z']}")
     else:
@@ -393,10 +397,83 @@ def deploy(target):
     
     console.print("\n[bold green]✅ Deployment DNA successfully compiled and pushed to cloud![/bold green]")
 
+# ==========================================
+# DAY 21: THE MULTIPLAYER HOLE (DETERMINISTIC NETCODE)
+# ==========================================
+@cli.group()
+def netcode():
+    """Day 21: Deterministic Netcode Commands."""
+    pass
+
+@netcode.command(name="sync")
+def netcode_sync():
+    """Simulates a world state change, calculates the surgical Delta, and broadcasts it to Supabase."""
+    console.print(Panel("[bold cyan]Day 21: Testing the Deterministic Netcode Hole[/bold cyan]", border_style="cyan"))
+    
+    # 1. Load current state (or mock it)
+    project_id = get_active_project_id()
+    if project_id:
+        old_state = get_world_state(project_id).model_dump()
+    else:
+        old_state = {"nodes": [], "world_state": {"heat_level": 0, "time_of_day": "12:00"}}
+        
+    console.print("[yellow]Current World State loaded.[/yellow]")
+    
+    # 2. Simulate a change (The New State)
+    new_state = copy.deepcopy(old_state)
+    
+    # Let's simulate a door locking and heat level rising
+    current_heat = new_state.get("world_state", {}).get("heat_level", 0)
+    if "world_state" not in new_state:
+        new_state["world_state"] = {}
+    new_state["world_state"]["heat_level"] = current_heat + 1
+    
+    if "nodes" not in new_state:
+        new_state["nodes"] = []
+        
+    new_state["nodes"].append({
+        "id": "door_tavern_01",
+        "name": "Tavern Door",
+        "type": "interactive_prop",
+        "state": "locked"
+    })
+    
+    console.print("[yellow]Simulating change: Tavern Door locked, Heat Level increased.[/yellow]")
+    
+    # 3. Calculate the Surgical Delta
+    with console.status("[bold green]Netcode Engine is calculating the mathematical difference...[/bold green]"):
+        delta = NetcodeEngine.calculate_delta(old_state, new_state)
+        
+    # 4. Convert to JSON and BROADCAST to Supabase
+    delta_json = delta.model_dump(mode='json')
+    
+    console.print("\n[bold magenta]--- EXACT BROADCAST PAYLOAD (STATE DELTA) ---[/bold magenta]")
+    syntax = Syntax(json.dumps(delta_json, indent=2), "json", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="Supabase Realtime Payload", border_style="green"))
+    
+    # 5. ACTUALLY SEND IT TO SUPABASE
+    if supabase:
+        with console.status("[bold yellow]Broadcasting to Supabase Realtime...[/bold yellow]"):
+            try:
+                response = supabase.table("state_deltas").insert({
+                    "delta_data": delta_json,
+                    "timestamp": delta_json["timestamp"]
+                }).execute()
+                console.print("\n[bold green]✅ SUCCESS! Delta broadcasted to Supabase![/bold green]")
+                console.print("[bold cyan]Check the Table Editor to see the Delta sitting in the database![/bold cyan]")
+            except Exception as e:
+                console.print(f"\n[bold red]Error broadcasting: {e}[/bold red]")
+    else:
+        console.print("\n[bold yellow]Supabase not connected. Delta calculated but not broadcast.[/bold yellow]")
+    
+    console.print("\n[bold green]✅ Netcode calculation complete![/bold green]")
+    console.print("[bold cyan]Zero lag compensation. Zero heavy physics. Pure JSON DNA.[/bold cyan]")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
 cli.add_command(backend)
+cli.add_command(netcode)
 
 # ==========================================
 # 3. START THE ENGINE
