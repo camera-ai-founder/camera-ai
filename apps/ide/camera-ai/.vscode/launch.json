@@ -2,14 +2,15 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Camera AI Extension",
+            "name": "Run Extension",
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/apps/ide/camera-ai"
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "${workspaceFolder}"
             ],
             "outFiles": [
-                "${workspaceFolder}/apps/ide/camera-ai/out/**/*.js"
+                "${workspaceFolder}/out/**/*.js"
             ]
         }
     ]

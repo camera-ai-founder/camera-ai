@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNA Mutator Interface</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            background: #1e1e1e; 
+            color: #d4d4d4; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            box-sizing: border-box; 
+        }
+        h2 { color: #00ffcc; margin-top: 0; }
+        .controls { margin-bottom: 20px; }
+        label { margin-right: 10px; font-weight: bold; }
+        
+        select { 
+            padding: 8px; 
+            background: #333; 
+            color: #fff; 
+            border: 1px solid #00ffcc; 
+            border-radius: 4px; 
+            font-size: 16px; 
+            cursor: pointer;
+        }
+        
+        button {
+            margin-left: 10px;
+            padding: 8px 15px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button:hover { background: #005a9e; }
+
+        .suggestion-box {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #252526;
+            border-left: 4px solid #00ffcc;
+            font-style: italic;
+            color: #cccccc;
+            min-height: 20px;
+        }
+        
+        .canvas-container { 
+            flex-grow: 1; 
+            border: 2px solid #00ffcc; 
+            border-radius: 8px; 
+            overflow: hidden; 
+        }
+        iframe { 
+            width: 100%; 
+            height: 100%; 
+            border: none; 
+            background: #fff; 
+        }
+    </style>
+</head>
+<body>
+    <h2>Token Styler & Reality Canvas</h2>
+    
+    <div class="controls">
+        <label for="tokenSelect">Mutate Design Token:</label>
+        <select id="tokenSelect">
+            <option value="accent_primary">Accent Primary (Neon Cyan)</option>
+            <option value="bg_dark">Background Dark (Deep Void)</option>
+            <option value="text_neon">Text Neon (Bright Pulse)</option>
+        </select>
+        
+        <button id="suggestBtn">Suggest Next Entity</button>
+    </div>
+
+    <div id="suggestionBox" class="suggestion-box">Waiting for DNA suggestion...</div>
+
+    <div class="canvas-container">
+        <iframe id="liveCanvas" src="http://localhost:5000"></iframe>
+    </div>
+    
+    <script>
+        const tokenSelect = document.getElementById('tokenSelect');
+        const suggestBtn = document.getElementById('suggestBtn');
+        const vscode = acquireVsCodeApi();
+
+        // 1. Send message to Extension when dropdown changes
+        tokenSelect.addEventListener('change', (event) => {
+            vscode.postMessage({ command: 'mutateToken', token: event.target.value });
+        });
+
+        // 2. Send message to Extension when Suggest button is clicked
+        suggestBtn.addEventListener('click', () => {
+            document.getElementById('suggestionBox').innerText = "Consulting the Brain...";
+            vscode.postMessage({ command: 'suggestEntity' });
+        });
+
+        // 3. Listen for messages from the Extension (Reload canvas or show suggestion)
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.command === 'reloadCanvas') {
+                const iframe = document.getElementById('liveCanvas');
+                iframe.src = iframe.src; 
+            } else if (message.command === 'displaySuggestion') {
+                document.getElementById('suggestionBox').innerText = message.suggestion;
+            }
+        });
+    </script>
+</body>
+</html>

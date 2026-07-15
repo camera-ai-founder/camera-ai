@@ -1,32 +1,36 @@
 {
-  "name": "camera-ai",
-  "displayName": "Camera AI",
-  "description": "The Ontological Genesis Fabric IDE",
+  "name": "dna-mutator",
+  "displayName": "DNA Mutator",
+  "description": "The Anti-IDE Reality Editor. We reject the Old Paradigm.",
   "version": "0.0.1",
-  "publisher": "camera-ai-founder",
+  "publisher": "founder",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.80.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onCommand:camera-ai.analyze"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": ["*"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
+        "command": "dnaMutator.start",
+        "title": "Start DNA Mutator"
+      },
+      {
         "command": "camera-ai.analyze",
-        "title": "Camera AI: Analyze Highlighted Code"
+        "title": "Analyze with Camera AI"
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile"
+    "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@types/vscode": "^1.85.0",
-    "typescript": "^5.3.3"
+    "@types/node": "^18.19.130",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.1.0"
   }
 }
