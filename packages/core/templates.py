@@ -179,3 +179,26 @@ def delete_{lower_entity_name}(item_id: int):
     return {{"message": "{entity_name} deleted"}}
 '''
 }
+
+# ==========================================
+# DAY 20: THE DEPLOYMENT TEMPLATE VAULT
+# ==========================================
+
+DOCKERFILE_TEMPLATE = """# Pre-audited Dockerfile template for OGF deployment
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# INJECTED PORTS
+{{PORTS}}
+
+# INJECTED ENV VARS
+{{ENV_VARS}}
+
+CMD ["python", "main.py"]
+"""

@@ -234,3 +234,17 @@ class LogicDNA(BaseModel):
         ..., 
         description="A simple text description of the database tables and columns needed."
     )
+
+# ==========================================
+# DAY 20 MODELS: THE DEPLOYMENT DNA
+# ==========================================
+
+class DeployDNA(BaseModel):
+    """
+    The Deployment DNA. Forces the Brain to define the deployment topology 
+    structurally, rather than hallucinating raw bash scripts or Dockerfiles.
+    """
+    target_environment: str = Field(..., description="The deployment target, e.g., 'docker', 'render', 'railway', 'edge_function'.")
+    port_mappings: Dict[int, int] = Field(default_factory=dict, description="Mapping of internal app ports to external host ports, e.g., {8080: 80}.")
+    env_variables: Dict[str, str] = Field(default_factory=dict, description="Environment variables required for the build and runtime.")
+    asset_cdn_url: Optional[str] = Field(None, description="Optional CDN URL if heavy visual assets are offloaded to external storage.")

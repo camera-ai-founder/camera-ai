@@ -5,12 +5,12 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17 & 18 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18 & 20 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
-    PathingIntent, LogicDNA, Route # <-- DAY 18 ADDITIONS
+    PathingIntent, LogicDNA, Route, DeployDNA # <-- DAY 20 ADDITION
 )
 
 # ==========================================
@@ -578,4 +578,79 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
             routes=[Route(method="GET", path="/fallback")],
             auth_type="None",
             database_schema="Fallback schema"
+        )
+
+# ==========================================
+# 13. DAY 20: THE DEVOPS DIRECTOR (Deployment Topology)
+# ==========================================
+def generate_deployment_topology(world_state: WorldState, app_complexity: str = "lightweight") -> DeployDNA:
+    """
+    DAY 20: THE DEVOPS DIRECTOR.
+    Analyzes the world state and complexity to output perfect DeployDNA.
+    The AI determines the topology; the Engine writes the scripts.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return DeployDNA(
+            target_environment="docker",
+            port_mappings={8080: 80},
+            env_variables={},
+            asset_cdn_url=None
+        )
+
+    print("DevOps Director is determining deployment topology...")
+    
+    system_prompt = """
+    You are the DevOps Director for the Ontological Genesis Framework.
+    Your job is to determine the exact deployment topology based on the 
+    current World State and application complexity.
+    You MUST output strictly valid JSON matching the DeployDNA schema.
+    Do not write bash scripts. Do not write Dockerfiles. Only output the JSON topology.
+    
+    Example target environments: 'docker', 'render', 'railway'.
+    Remember to include necessary env variables like SUPABASE_URL if it's a web app.
+    """
+    
+    user_prompt = f"""
+    Current World State Heat Level: {world_state.heat_level}
+    Current Time of Day: {world_state.time_of_day}
+    Application Complexity Level: {app_complexity}
+    
+    Determine the target environment, required port mappings, 
+    and necessary environment variables for deployment.
+    
+    You MUST use this EXACT JSON structure and key names:
+    {{
+      "target_environment": "docker",
+      "port_mappings": {{"8080": 80}},
+      "env_variables": {{"SUPABASE_URL": "https://xyz.supabase.co"}},
+      "asset_cdn_url": null
+    }}
+    Change the values to fit the context, but KEEP THE EXACT KEY NAMES AND TYPES.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"} # Forces Groq to speak only in JSON
+        )
+        
+        raw_json = response.choices[0].message.content
+        
+        # Pydantic forces the raw JSON into our strict DeployDNA model
+        deploy_dna = DeployDNA.model_validate_json(raw_json)
+        print("DevOps Director generated flawless DeployDNA!")
+        return deploy_dna
+        
+    except Exception as e:
+        print(f"Brain Error (DevOps Director Failsafe): {e}")
+        return DeployDNA(
+            target_environment="docker",
+            port_mappings={8080: 80},
+            env_variables={},
+            asset_cdn_url=None
         )

@@ -19,20 +19,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-17 Imports + Day 18 Architect
+# Existing Day 1-17 Imports + Day 18 Architect + Day 20 DevOps
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
-    act_as_backend_architect # <-- DAY 18 REAL BRAIN WIRED IN
+    act_as_backend_architect,
+    generate_deployment_topology 
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
-from packages.core.models import VisualQuery, WorldState, NavMeshDNA
+from packages.core.models import VisualQuery, WorldState, NavMeshDNA, BiomeDNA 
 from packages.core.biome_engine import BiomeEngine
 from packages.core.navigation_engine import Voxelizer, AStarPathfinder
 
-# NEW DAY 18 IMPORTS FOR THE BACKEND COMPILER
 from packages.core.backend_compiler import save_compiled_file
+from packages.core.deployment_engine import DeploymentEngine 
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -308,7 +309,6 @@ def generate_backend(entity):
     """Generate a flawless backend API for an entity (e.g., 'User' or 'Product')."""
     console.print(f"🚀 [bold cyan]Initiating Genesis for entity:[/bold cyan] {entity}")
     
-    # WE USE THE REAL GROQ BRAIN HERE!
     dna = act_as_backend_architect(entity)
     
     console.print("⚙️ [bold yellow]Compiling DNA into bulletproof Python code...[/bold yellow]")
@@ -328,13 +328,11 @@ def backend_state(assignment):
     key, value = assignment.split("=", 1)
     console.print(f"💾 [bold green]Updated backend state:[/bold green] {key} is now '{value}'")
     
-    active_entity = "User" # Default for our test
+    active_entity = "User" 
     console.print(f"🔄 [bold yellow]Recompiling reality for active entity:[/bold yellow] {active_entity}...")
     
-    # WE USE THE REAL GROQ BRAIN HERE!
     dna = act_as_backend_architect(active_entity)
     
-    # Apply the new state the user typed!
     if key == "auth_type":
         dna.auth_type = value
         
@@ -342,6 +340,58 @@ def backend_state(assignment):
     
     console.print(f"✅ [bold green]Reality recompiled successfully with new state![/bold green]")
     console.print(f"📁 [bold cyan]New file saved to:[/bold cyan] {file_path}")
+
+# ==========================================
+# DAY 20: THE ONE-COMMAND DEPLOY PROTOCOL
+# ==========================================
+@cli.command()
+@click.argument('target', default='docker')
+def deploy(target):
+    """
+    The Reality Recompiler (Day 20).
+    Generates the deployment blueprint (Dockerfile & Asset Manifest).
+    Usage: camera deploy docker
+    """
+    console.print(Panel(f"[bold cyan]Initiating Deployment Protocol for target: {target}...[/bold cyan]", title="Day 20: Deployment Engine"))
+    
+    # 1. Fetch Current World State
+    project_id = get_active_project_id()
+    if not project_id:
+        console.print("[yellow]No active project found. Using default World State for deployment blueprint.[/yellow]")
+        world_state = WorldState()
+    else:
+        world_state = get_world_state(project_id)
+        
+    # 2. The DevOps Director determines the topology
+    with console.status("[bold green]DevOps Director is determining topology...[/bold green]"):
+        deploy_dna = generate_deployment_topology(world_state, app_complexity="medium")
+        
+    console.print("[bold green]✅ DevOps Director generated flawless DeployDNA![/bold green]")
+    
+    # 3. The Deterministic Engine synthesizes the Dockerfile
+    with console.status("[bold yellow]Deterministic Engine synthesizing Dockerfile...[/bold yellow]"):
+        dockerfile_content = DeploymentEngine.synthesize_dockerfile(deploy_dna)
+        
+    # 4. The Deterministic Engine synthesizes the Asset Manifest
+    with console.status("[bold yellow]Deterministic Engine packing Asset Swarm...[/bold yellow]"):
+        dummy_biome = BiomeDNA(
+            name="Cyberpunk Slum", elevation_curve=0.2, moisture_level=0.1, 
+            scatter_density=0.8, scatter_rules=[]
+        )
+        dummy_genesis_data = {"parametric_genomes": [], "visual_queries": []}
+        manifest_content = DeploymentEngine.synthesize_asset_manifest(dummy_biome, dummy_genesis_data)
+        
+    # 5. Print the Flawless Blueprints
+    console.print("\n[bold magenta]--- DOCKERFILE BLUEPRINT ---[/bold magenta]")
+    console.print(dockerfile_content)
+    
+    console.print("\n[bold magenta]--- ASSET MANIFEST ---[/bold magenta]")
+    console.print(manifest_content)
+    
+    # 6. DAY 20 STEP 6: PUSH TO THE CLOUD BRIDGE
+    DeploymentEngine.push_to_cloud(dockerfile_content, manifest_content, deploy_dna)
+    
+    console.print("\n[bold green]✅ Deployment DNA successfully compiled and pushed to cloud![/bold green]")
 
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
