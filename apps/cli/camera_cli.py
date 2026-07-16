@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-17 Imports + Day 18 Architect + Day 20 DevOps
+# Existing Day 1-22 Imports
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
@@ -30,18 +30,19 @@ from packages.core.brain import (
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
-from packages.core.models import VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA
 from packages.core.biome_engine import BiomeEngine
 from packages.core.navigation_engine import Voxelizer, AStarPathfinder
-
 from packages.core.backend_compiler import save_compiled_file
 from packages.core.deployment_engine import DeploymentEngine 
-
-# --- DAY 21 ADDITION: The Deterministic Netcode Engine ---
 from packages.core.netcode_engine import NetcodeEngine
-
-# --- DAY 22 ADDITION: The Zero-Trust Security Engine ---
 from packages.core.security_engine import sanitize_dna
+
+# --- DAY 23 ADDITION: Telemetry & Self-Healing Imports ---
+from packages.core.models import (
+    VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
+    PerformanceReport, BottleneckType
+)
+from packages.core.telemetry_engine import telemetry_brain
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
@@ -173,7 +174,10 @@ def compile(app_name):
     console.print(f"[bold yellow]Primary Accent Color:[/bold yellow] {design_tokens.accent_primary}")
 
     design_config = synthesize_design_tokens(design_tokens)
-    final_react_code = compile_ui(app_dna, design_config)
+    
+    # Day 23 Fix: compile_ui now returns a dict with 'code' and 'metrics'
+    ui_report = compile_ui(app_dna, design_config)
+    final_react_code = ui_report.get("code", "")
     
     syntax = Syntax(final_react_code, "jsx", theme="monokai", line_numbers=True)
     console.print(Panel(syntax, title="Final React Code (Zero Hallucinations)", border_style="green"))
@@ -304,7 +308,7 @@ def navigate_test():
     console.print("[bold cyan]The math is flawless, Founder. The entity will not clip through the building.[/bold cyan]")
 
 # ==========================================
-# DAY 18: THE BACKEND DNA COMPILER COMMANDS (WIRED TO REAL BRAIN)
+# DAY 18: THE BACKEND DNA COMPILER COMMANDS
 # ==========================================
 @cli.group()
 def backend():
@@ -320,7 +324,10 @@ def generate_backend(entity):
     dna = act_as_backend_architect(entity)
     
     console.print("⚙️ [bold yellow]Compiling DNA into bulletproof Python code...[/bold yellow]")
-    file_path = save_compiled_file(dna, output_folder="output")
+    
+    # Day 23 Fix: save_compiled_file now returns a dict report
+    compile_report = save_compiled_file(dna, output_folder="output")
+    file_path = compile_report.get("file_path", "Unknown")
     
     console.print(f"✅ [bold green]SUCCESS! Flawless backend compiled and saved to:[/bold green] {file_path}")
     console.print("🚫 [bold red]Zero hallucinations. Zero syntax errors. Pure deterministic math.[/bold red]")
@@ -344,7 +351,8 @@ def backend_state(assignment):
     if key == "auth_type":
         dna.auth_type = value
         
-    file_path = save_compiled_file(dna, output_folder="output")
+    compile_report = save_compiled_file(dna, output_folder="output")
+    file_path = compile_report.get("file_path", "Unknown")
     
     console.print(f"✅ [bold green]Reality recompiled successfully with new state![/bold green]")
     console.print(f"📁 [bold cyan]New file saved to:[/bold cyan] {file_path}")
@@ -362,7 +370,6 @@ def deploy(target):
     """
     console.print(Panel(f"[bold cyan]Initiating Deployment Protocol for target: {target}...[/bold cyan]", title="Day 20: Deployment Engine"))
     
-    # 1. Fetch Current World State
     project_id = get_active_project_id()
     if not project_id:
         console.print("[yellow]No active project found. Using default World State for deployment blueprint.[/yellow]")
@@ -370,17 +377,14 @@ def deploy(target):
     else:
         world_state = get_world_state(project_id)
         
-    # 2. The DevOps Director determines the topology
     with console.status("[bold green]DevOps Director is determining topology...[/bold green]"):
         deploy_dna = generate_deployment_topology(world_state, app_complexity="medium")
         
     console.print("[bold green]✅ DevOps Director generated flawless DeployDNA![/bold green]")
     
-    # 3. The Deterministic Engine synthesizes the Dockerfile
     with console.status("[bold yellow]Deterministic Engine synthesizing Dockerfile...[/bold yellow]"):
         dockerfile_content = DeploymentEngine.synthesize_dockerfile(deploy_dna)
         
-    # 4. The Deterministic Engine synthesizes the Asset Manifest
     with console.status("[bold yellow]Deterministic Engine packing Asset Swarm...[/bold yellow]"):
         dummy_biome = BiomeDNA(
             name="Cyberpunk Slum", elevation_curve=0.2, moisture_level=0.1, 
@@ -389,14 +393,12 @@ def deploy(target):
         dummy_genesis_data = {"parametric_genomes": [], "visual_queries": []}
         manifest_content = DeploymentEngine.synthesize_asset_manifest(dummy_biome, dummy_genesis_data)
         
-    # 5. Print the Flawless Blueprints
     console.print("\n[bold magenta]--- DOCKERFILE BLUEPRINT ---[/bold magenta]")
     console.print(dockerfile_content)
     
     console.print("\n[bold magenta]--- ASSET MANIFEST ---[/bold magenta]")
     console.print(manifest_content)
     
-    # 6. DAY 20 STEP 6: PUSH TO THE CLOUD BRIDGE
     DeploymentEngine.push_to_cloud(dockerfile_content, manifest_content, deploy_dna)
     
     console.print("\n[bold green]✅ Deployment DNA successfully compiled and pushed to cloud![/bold green]")
@@ -414,7 +416,6 @@ def netcode_sync():
     """Simulates a world state change, calculates the surgical Delta, and broadcasts it to Supabase."""
     console.print(Panel("[bold cyan]Day 21: Testing the Deterministic Netcode Hole[/bold cyan]", border_style="cyan"))
     
-    # 1. Load current state (or mock it)
     project_id = get_active_project_id()
     if project_id:
         old_state = get_world_state(project_id).model_dump()
@@ -423,10 +424,8 @@ def netcode_sync():
         
     console.print("[yellow]Current World State loaded.[/yellow]")
     
-    # 2. Simulate a change (The New State)
     new_state = copy.deepcopy(old_state)
     
-    # Let's simulate a door locking and heat level rising
     current_heat = new_state.get("world_state", {}).get("heat_level", 0)
     if "world_state" not in new_state:
         new_state["world_state"] = {}
@@ -444,18 +443,15 @@ def netcode_sync():
     
     console.print("[yellow]Simulating change: Tavern Door locked, Heat Level increased.[/yellow]")
     
-    # 3. Calculate the Surgical Delta
     with console.status("[bold green]Netcode Engine is calculating the mathematical difference...[/bold green]"):
         delta = NetcodeEngine.calculate_delta(old_state, new_state)
         
-    # 4. Convert to JSON and BROADCAST to Supabase
     delta_json = delta.model_dump(mode='json')
     
     console.print("\n[bold magenta]--- EXACT BROADCAST PAYLOAD (STATE DELTA) ---[/bold magenta]")
     syntax = Syntax(json.dumps(delta_json, indent=2), "json", theme="monokai", line_numbers=True)
     console.print(Panel(syntax, title="Supabase Realtime Payload", border_style="green"))
     
-    # 5. ACTUALLY SEND IT TO SUPABASE
     if supabase:
         with console.status("[bold yellow]Broadcasting to Supabase Realtime...[/bold yellow]"):
             try:
@@ -488,26 +484,21 @@ def security_audit(file_path):
     console.print(f"Target: {os.path.abspath(file_path)}\n")
 
     try:
-        # 1. Read the raw file
         with open(file_path, 'r', encoding='utf-8') as f:
             raw_json_string = f.read()
 
-        # 2. Define strict security rules for this audit
         security_config = SecurityDNA(
-            max_payload_size=1048576, # 1MB limit
-            allowed_keys=[], # Let Pydantic's model definition handle the allowed keys
+            max_payload_size=1048576,
+            allowed_keys=[],
             restricted_characters=["<", ">", ";", "--", "/*", "*/"]
         )
 
-        # 3. Pass it through the Sanitizer (The Bouncer, The Scissors, The Vault)
-        # We use AppDNA as the target model because it contains the SecurityDNA strand
         clean_dna = sanitize_dna(
             raw_json_string=raw_json_string,
             target_model=AppDNA,
             security_config=security_config
         )
 
-        # 4. SUCCESS: If it makes it here, the data is mathematically pure
         console.print(Panel(
             "[bold green]✅ DNA PURE[/bold green]\n\n"
             "The payload passed all Zero-Trust checks.\n"
@@ -520,7 +511,6 @@ def security_audit(file_path):
         ))
 
     except ValueError as e:
-        # 5. FAILURE: The Sanitizer caught a threat and raised a ValueError
         error_message = str(e)
         console.print(Panel(
             f"[bold red]🚫 THREAT BLOCKED[/bold red]\n\n"
@@ -532,7 +522,6 @@ def security_audit(file_path):
         ))
 
     except Exception as e:
-        # 6. UNEXPECTED ERROR: Failsafe for file reading issues, etc.
         console.print(Panel(
             f"[bold yellow]️ AUDIT ERROR[/bold yellow]\n\n"
             f"An unexpected error occurred: {str(e)}\n"
@@ -541,11 +530,127 @@ def security_audit(file_path):
             border_style="yellow"
         ))
 
+# ==========================================
+# DAY 23: THE TELEMETRY HOLE (AI SELF-CORRECTION)
+# ==========================================
+@cli.group()
+def telemetry():
+    """Day 23: Telemetry & AI Self-Correction Commands."""
+    pass
+
+@telemetry.command(name="check")
+def telemetry_check():
+    """Pulls the last 5 performance reports from the Black Box and triggers AI self-correction."""
+    console.print(Panel("[bold cyan]Day 23: Inspecting the Telemetry Black Box[/bold cyan]", border_style="cyan"))
+    
+    if not supabase:
+        console.print("[bold red]Error: Supabase is not connected. Cannot read the Black Box.[/bold red]")
+        return
+
+    # 1. Fetch the last 5 reports from the Black Box
+    with console.status("[bold green]Querying the Black Box for recent performance drops...[/bold green]"):
+        try:
+            response = supabase.table("telemetry_logs").select("*").order("created_at", desc=True).limit(5).execute()
+            logs = response.data
+        except Exception as e:
+            console.print(f"[bold red]Error fetching telemetry logs: {e}[/bold red]")
+            console.print("[yellow]Hint: Did you run the SQL to create the 'telemetry_logs' table in Supabase?[/yellow]")
+            return
+
+    if not logs:
+        console.print("[bold yellow]The Black Box is empty. No performance reports have been sent yet.[/bold yellow]")
+        console.print("[cyan]Run the frontend app and trigger a lag spike to populate the Black Box![/cyan]")
+        return
+
+    # 2. Display the reports in a Rich Table
+    table = Table(title="📊 Last 5 Telemetry Reports (Black Box)")
+    table.add_column("Timestamp", style="dim")
+    table.add_column("FPS", justify="right", style="bold")
+    table.add_column("Dropped Frames", justify="right", style="yellow")
+    table.add_column("Memory (MB)", justify="right", style="blue")
+    table.add_column("Bottleneck", style="red")
+
+    for log in logs:
+        ts = log.get('created_at', 'Unknown')
+        if len(ts) > 19:
+            ts = ts[:19] # Trim the timezone/milliseconds for cleaner display
+            
+        fps = log.get('current_fps', 0)
+        dropped = log.get('dropped_frames', 0)
+        mem = log.get('memory_usage_mb', 0)
+        bottleneck = log.get('bottleneck_component', 'none')
+        
+        fps_style = "green" if fps >= 55 else "red"
+        
+        table.add_row(
+            ts, 
+            f"[{fps_style}]{fps}[/{fps_style}]", 
+            str(dropped), 
+            f"{mem:.1f}", 
+            bottleneck.upper() if bottleneck else "NONE"
+        )
+
+    console.print(table)
+
+    # 3. Find the most recent unhealthy report to trigger the AI Brain
+    bad_report_dict = None
+    for log in logs:
+        bn = log.get('bottleneck_component')
+        if bn and bn != 'none' and bn != BottleneckType.NONE.value:
+            bad_report_dict = log
+            break
+            
+    if not bad_report_dict:
+        console.print("\n[bold green]✅ All recent reports are healthy. The engine is running perfectly at 60fps![/bold green]")
+        return
+
+    # 4. Trigger the AI Self-Correction Loop
+    console.print(f"\n[bold red]🚨 CRITICAL BOTTLENECK DETECTED: {bad_report_dict.get('bottleneck_component').upper()}[/bold red]")
+    console.print("[bold yellow]Initiating AI Self-Healing Sequence...[/bold yellow]")
+    
+    # Reconstruct the Pydantic model from the Supabase dict
+    try:
+        report_obj = PerformanceReport.model_validate(bad_report_dict)
+    except Exception as e:
+        console.print(f"[red]Failed to validate report against Pydantic schema: {e}[/red]")
+        return
+
+    # Load a default AppDNA to heal
+    current_dna = AppDNA(app_name="Genesis Engine") 
+    
+    with console.status("[bold green]Groq AI Brain is analyzing the bottleneck and downgrading DNA...[/bold green]"):
+        healed_dna = telemetry_brain.heal_dna(report_obj, current_dna)
+
+    # 5. Print the AI's Self-Correction Suggestions (The Healed DNA)
+    console.print("\n[bold magenta]--- 🧬 AI SELF-CORRECTION: HEALED DNA ---[/bold magenta]")
+    
+    # Show exactly what the AI downgraded
+    original_renderer = current_dna.renderer
+    healed_renderer = healed_dna.renderer
+    
+    original_budget = current_dna.drama_budget
+    healed_budget = healed_dna.drama_budget
+
+    correction_panel = f"""
+[bold cyan]GenesisRenderer Adjustments:[/bold cyan]
+- Shadows: [red]{original_renderer.enable_shadows}[/red] -> [green]{healed_renderer.enable_shadows}[/green]
+- VFX Complexity: [red]{original_renderer.vfx_complexity}[/red] -> [green]{healed_renderer.vfx_complexity}[/green]
+- Engine Fallback: [yellow]{healed_renderer.fallback_engine}[/yellow]
+
+[bold cyan]Drama Budget Adjustments:[/bold cyan]
+- Max Entities: [red]{original_budget.max_entities}[/red] -> [green]{healed_budget.max_entities}[/green]
+- Max Particles: [red]{original_budget.max_particles}[/red] -> [green]{healed_budget.max_particles}[/green]
+
+[bold green]✅ The AI has successfully downgraded the reality to guarantee a flawless 60fps![/bold green]
+"""
+    console.print(Panel(correction_panel, title="AI SUGGESTIONS APPLIED", border_style="green"))
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
 cli.add_command(backend)
 cli.add_command(netcode)
+cli.add_command(telemetry) # Day 23 Addition
 
 # ==========================================
 # 3. START THE ENGINE

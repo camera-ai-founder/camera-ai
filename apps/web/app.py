@@ -1,24 +1,62 @@
 import os
 import json
+import threading
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, render_template, jsonify, request
 from supabase import create_client, Client
 
-# --- DAY 12 IMPORTS: The Juice Engine & Brain ---
-from packages.core.models import ImpactVector, JuiceProfile, StateDelta
-from packages.core import brain
+# ==========================================
+# DAY 12 IMPORTS: The Juice Engine & Brain
+# ==========================================
+try:
+    from packages.core.models import ImpactVector, JuiceProfile, StateDelta
+except ImportError:
+    ImpactVector = None
+    JuiceProfile = None
+    StateDelta = None
 
-# --- DAY 21 IMPORT: The Deterministic Netcode Engine ---
-from packages.core.netcode_engine import NetcodeEngine
+try:
+    from packages.core import brain
+except ImportError:
+    brain = None
+
+# ==========================================
+# DAY 21 IMPORT: The Deterministic Netcode Engine
+# ==========================================
+try:
+    from packages.core.netcode_engine import NetcodeEngine
+except ImportError:
+    NetcodeEngine = None
+
+# ==========================================
+# DAY 23 IMPORTS: Telemetry & Self-Healing
+# ==========================================
+try:
+    from packages.core.models import PerformanceReport, AppDNA
+    from packages.core.telemetry_engine import telemetry_brain
+except ImportError:
+    PerformanceReport = None
+    AppDNA = None
+    telemetry_brain = None
 
 # --- 0. LOAD THE .ENV FILE ---
 load_dotenv()
 
+# --- SET UP LOGGING ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("FlaskApp")
+
 # --- 1. SETUP SUPABASE ---
 url = os.environ.get("SUPABASE_URL")
 key = os.environ.get("SUPABASE_KEY")
-supabase = create_client(url, key)
+
+if not url or not key:
+    logger.warning("Supabase credentials not found. Black Box and Realtime are offline.")
+    supabase = None
+else:
+    supabase: Client = create_client(url, key)
 
 # --- 2. SETUP FLASK ---
 app = Flask(__name__)
@@ -40,17 +78,38 @@ def save_current_state(state: dict):
     with open(STATE_FILE_PATH, "w") as f:
         json.dump(state, f, indent=4)
 
-# --- 3. MAIN WEB PAGE ROUTE ---
+# ==========================================
+# DAY 23: BACKGROUND WORKER (THE BLACK BOX WRITER)
+# ==========================================
+def save_to_blackbox(report_data: dict):
+    """
+    Runs in a separate thread. Writes telemetry to Supabase
+    without freezing the main Flask request thread.
+    """
+    if not supabase:
+        return
+    try:
+        supabase.table("telemetry_logs").insert(report_data).execute()
+        logger.info("📦 Black Box: Telemetry report saved successfully.")
+    except Exception as e:
+        logger.error(f"Black Box write failed: {e}")
+
+# ==========================================
+# 3. MAIN WEB PAGE ROUTE
+# ==========================================
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# --- 4. API ROUTE FOR CYTOSCAPE ---
+# ==========================================
+# 4. API ROUTE FOR CYTOSCAPE
+# ==========================================
 @app.route('/api/graph')
 def get_graph_data():
     """Fetches Camera AI ontology nodes and formats them for the web visualizer."""
-    
-    # Fetch all nodes from Supabase
+    if not supabase:
+        return jsonify({"nodes": [], "edges": [], "debug": {"error": "Supabase offline"}}), 500
+
     response = supabase.table('nodes').select('*').execute()
     all_nodes = response.data
 
@@ -62,7 +121,6 @@ def get_graph_data():
         node_label = node.get('label', 'Node')
         parent_id = node.get('parent_id')
 
-        # Add the node
         cy_nodes.append({
             "data": {
                 "id": str(node['id']),
@@ -70,7 +128,6 @@ def get_graph_data():
             }
         })
         
-        # Check if parent_id exists and is not null/None/empty
         if parent_id is not None and parent_id != 'null' and parent_id != '':
             edges_created += 1
             cy_edges.append({
@@ -80,7 +137,6 @@ def get_graph_data():
                 }
             })
 
-    # Return data PLUS debug info
     return jsonify({
         "nodes": cy_nodes,
         "edges": cy_edges,
@@ -96,15 +152,15 @@ def get_graph_data():
 # ==========================================
 @app.route('/api/impact', methods=['POST'])
 def trigger_impact():
-    """
-    Receives the ImpactVector JSON, calculates the narrative, and sends it back.
-    """
+    """Receives the ImpactVector JSON, calculates the narrative, and sends it back."""
+    if not ImpactVector or not JuiceProfile or not brain:
+        return jsonify({"error": "Day 12 Juice Engine not available"}), 500
+
     data = request.get_json()
     
     if not data:
         return jsonify({"error": "No JSON data provided"}), 400
 
-    # 1. Rebuild our Pydantic models from the incoming JSON
     impact_vector = ImpactVector(**data.get('impact_vector', {}))
     juice = JuiceProfile(
         impact_type=data.get('impact_type', 'default'),
@@ -112,10 +168,8 @@ def trigger_impact():
         impact_vector=impact_vector
     )
 
-    # 2. Ask our AI brain to generate the cinematic narrative!
     narrative = brain.generate_narrative_impact(juice, object_name="the target")
 
-    # 3. Send the math and the story back to the browser
     return jsonify({
         "status": "success",
         "narrative": narrative,
@@ -129,24 +183,20 @@ def trigger_impact():
 @app.route('/api/live-canvas', methods=['POST'])
 def update_live_canvas():
     """Receives state from the CLI and broadcasts it via Supabase Realtime."""
+    if not supabase:
+        return jsonify({"status": "error", "message": "Supabase offline"}), 500
+
     try:
-        # 1. Get the JSON data sent by the CLI
         new_state = request.get_json()
         
-        # 2. Push it to a Supabase table called 'live_canvas_state'
-        # We use 'upsert' (Update or Insert) so we always just have one master record (id=1)
         response = supabase.table("live_canvas_state").upsert({
             "id": 1, 
             "data": new_state
         }).execute()
         
-        # 3. Because Supabase has Realtime enabled on this table, 
-        # the Web App will instantly receive this change without refreshing!
         return jsonify({"status": "success", "message": "Live Canvas broadcasted!"}), 200
         
     except Exception as e:
-        # If the table doesn't exist yet, Supabase will throw an error.
-        # We catch it and print a friendly message so the app doesn't crash.
         return jsonify({
             "status": "error", 
             "message": f"Could not broadcast. Please ensure the 'live_canvas_state' table exists in Supabase. Error: {str(e)}"
@@ -159,32 +209,24 @@ def update_live_canvas():
 def update_state():
     """
     THE REALTIME DELTA BROADCAST HOOK.
-    The CLI or Brain sends the NEW full state here.
-    We calculate the surgical Delta using pure math,
-    then broadcast ONLY the Delta via Supabase Realtime.
+    Calculates the surgical Delta using pure math,
+    then broadcasts ONLY the Delta via Supabase Realtime.
     """
+    if not supabase or not NetcodeEngine:
+        return jsonify({"status": "error", "message": "Supabase or Netcode Engine offline"}), 500
+
     try:
-        # 1. Get the incoming new state from the request
         new_state_data = request.get_json()
         
         if not new_state_data:
             return jsonify({"status": "error", "message": "No JSON data provided"}), 400
         
-        # 2. Load the old state from our master JSON DNA file
         old_state_data = load_current_state()
-        
-        # 3. THE MATH DIFFING — calculate exactly what changed
         delta: StateDelta = NetcodeEngine.calculate_delta(old_state_data, new_state_data)
-        
-        # 4. Save the new state as our new master truth
         save_current_state(new_state_data)
         
-        # 5. Convert Pydantic model to pure JSON dictionary
         delta_payload = delta.model_dump(mode='json')
         
-        # 6. BROADCAST ONLY THE DELTA to Supabase
-        # Inserting into 'state_deltas' triggers Supabase Realtime to push 
-        # this tiny payload to all connected clients instantly!
         supabase.table("state_deltas").insert({
             "delta_data": delta_payload,
             "timestamp": delta_payload["timestamp"]
@@ -201,8 +243,84 @@ def update_state():
     except Exception as e:
         return jsonify({
             "status": "error", 
-            "message": f"Could not broadcast delta. Please ensure the 'state_deltas' table exists in Supabase with Realtime enabled. Error: {str(e)}"
+            "message": f"Could not broadcast delta. Error: {str(e)}"
         }), 500
 
+# ==========================================
+# 8. DAY 23: TELEMETRY BLACK BOX ENDPOINTS
+# ==========================================
+@app.route('/api/telemetry/report', methods=['POST'])
+def receive_telemetry_report():
+    """
+    The endpoint the frontend Profiler calls when FPS drops.
+    Validates the report, saves to Black Box in background, 
+    and immediately responds without blocking.
+    """
+    if not PerformanceReport:
+        return jsonify({"status": "error", "message": "Telemetry models not available"}), 500
+
+    try:
+        raw_json = request.json
+        report = PerformanceReport.model_validate(raw_json)
+        
+        logger.info(f"🚨 Telemetry Received: FPS {report.current_fps} | Bottleneck: {report.bottleneck_component}")
+
+        # Fire and forget: Send to the Black Box in a background thread
+        if supabase:
+            thread = threading.Thread(target=save_to_blackbox, args=(report.model_dump(mode='json'),))
+            thread.daemon = True
+            thread.start()
+
+        return jsonify({"status": "received", "message": "Logged to Black Box"}), 200
+
+    except Exception as e:
+        logger.error(f"Invalid Telemetry Report received: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/telemetry/history', methods=['GET'])
+def get_telemetry_history():
+    """
+    Endpoint for the CLI (Step 6) to pull the last 5 performance reports.
+    """
+    if not supabase:
+        return jsonify({"error": "Black Box offline"}), 500
+        
+    try:
+        response = supabase.table("telemetry_logs").select("*").order("created_at", desc=True).limit(5).execute()
+        return jsonify(response.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/telemetry/heal', methods=['POST'])
+def trigger_ai_healing():
+    """
+    The full self-healing endpoint. Receives a performance report,
+    asks the AI Brain to downgrade the DNA, and returns the healed DNA.
+    """
+    if not PerformanceReport or not telemetry_brain or not AppDNA:
+        return jsonify({"status": "error", "message": "AI Healing system not available"}), 500
+
+    try:
+        raw_json = request.json
+        report = PerformanceReport.model_validate(raw_json)
+        
+        # Load the current master DNA
+        current_dna = AppDNA()  # In production, load from DB or OGF_STATE.json
+        
+        # Ask the AI Brain to heal
+        healed_dna = telemetry_brain.heal_dna(report, current_dna)
+        
+        return jsonify({
+            "status": "healed",
+            "healed_dna": healed_dna.model_dump(mode='json')
+        }), 200
+
+    except Exception as e:
+        logger.error(f"AI Healing failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# ==========================================
+# RUN THE SERVER
+# ==========================================
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
