@@ -253,6 +253,16 @@ class AudioDNA(BaseModel):
     filter_type: Literal["lowpass", "highpass", "bandpass", "none"] = Field(default="none", description="Frequencies to cut off to shape the tone")
 
 # ==========================================================
+# DAY 25: THE INPUT DNA (DETERMINISTIC ACTION MAPPING)
+# ==========================================================
+class InputDNA(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    action_name: str = Field(..., description="The abstract intent, e.g., 'jump', 'dash', 'interact'. NOT hardcoded logic.")
+    hardware_trigger: str = Field(..., description="The physical button or axis, e.g., 'Spacebar', 'Gamepad_A', 'Mouse_Left'.")
+    modifier_key: Optional[str] = Field(None, description="Optional modifier like 'Shift', 'Ctrl', or None.")
+    active_context: str = Field("gameplay", description="The context where this is valid: 'gameplay', 'ui', or 'cinematic'.")
+
+# ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
 # ==========================================================
 class OntologicalNode(BaseModel):

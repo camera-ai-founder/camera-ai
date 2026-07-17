@@ -1,18 +1,20 @@
 # packages/core/brain.py
 import os
 import json
+from typing import List
 from dotenv import load_dotenv
 from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21 & 24 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24 & 25 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
     PathingIntent, LogicDNA, Route, DeployDNA, StateDelta, SecurityDNA,
-    AudioDNA # ADDED FOR DAY 24
+    AudioDNA, # ADDED FOR DAY 24
+    InputDNA # ADDED FOR DAY 25
 )
 
 # ==========================================
@@ -820,3 +822,80 @@ def act_as_foley_director(entity_description: str) -> AudioDNA:
     except Exception as e:
         print(f"Brain Error (Foley Director Failsafe): {e}")
         return AudioDNA() # Returns a default, safe silent hum
+
+# ==========================================
+# 16. DAY 25: THE CONTROL DIRECTOR (Input Wiring)
+# ==========================================
+def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
+    """
+    DAY 25: THE CONTROL DIRECTOR.
+    When the Brain invents a new mechanic (like a jetpack or vehicle),
+    it automatically invents the InputDNA so the player can control it immediately.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return [] # Safe empty list
+
+    print(f"Control Director is wiring inputs for: '{mechanic_description}'...")
+    
+    system_prompt = f"""
+    You are the Control Director for a deterministic 3D game engine.
+    Your job is to invent the input controls for new game mechanics, vehicles, or items.
+    You MUST output ONLY valid JSON. No markdown, no explanations.
+    
+    Allowed active_context values: "gameplay", "ui", "cinematic"
+    Allowed hardware_trigger examples: "Spacebar", "KeyW", "ShiftLeft", "Mouse_Left", "Gamepad_A"
+
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
+    
+    user_message = f"""
+    Mechanic Description: {mechanic_description}
+    
+    Design the input controls for this mechanic. 
+    You MUST output an exact JSON object with a key called "inputs" containing a list of InputDNA objects.
+    
+    You MUST use this EXACT JSON structure:
+    {{
+      "inputs": [
+        {{
+          "action_name": "thrust_up",
+          "hardware_trigger": "Spacebar",
+          "modifier_key": null,
+          "active_context": "gameplay"
+        }},
+        {{
+          "action_name": "hover",
+          "hardware_trigger": "ShiftLeft",
+          "modifier_key": null,
+          "active_context": "gameplay"
+        }}
+      ]
+    }}
+    Change the action names and hardware triggers to perfectly fit the mechanic, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.4 
+        )
+        
+        raw_json = response.choices[0].message.content
+        parsed_data = json.loads(raw_json)
+        
+        # Extract the list and force it through our Pydantic Bouncer
+        inputs_list = parsed_data.get("inputs", [])
+        validated_inputs = [InputDNA(**item) for item in inputs_list]
+        
+        print(f"Control Director wired {len(validated_inputs)} inputs flawlessly!")
+        return validated_inputs
+        
+    except Exception as e:
+        print(f"Brain Error (Control Director Failsafe): {e}")
+        return [] # Returns an empty list so the engine doesn't crash

@@ -21,13 +21,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-22 Imports + Day 24 Audio Director
+# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
     act_as_backend_architect,
     generate_deployment_topology,
-    act_as_foley_director # ADDED FOR DAY 24
+    act_as_foley_director, # ADDED FOR DAY 24
+    act_as_control_director # ADDED FOR DAY 25
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
@@ -38,17 +39,21 @@ from packages.core.deployment_engine import DeploymentEngine
 from packages.core.netcode_engine import NetcodeEngine
 from packages.core.security_engine import sanitize_dna
 
-# --- DAY 23 & DAY 24 ADDITIONS: Telemetry, Self-Healing & Audio Models ---
+# --- DAY 23, 24 & 25 ADDITIONS: Telemetry, Audio & Input Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
     PerformanceReport, BottleneckType,
-    AudioDNA # ADDED FOR DAY 24
+    AudioDNA, # ADDED FOR DAY 24
+    InputDNA # ADDED FOR DAY 25
 )
 from packages.core.telemetry_engine import telemetry_brain
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
 supabase = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+# Path to the master save file for local DNA (like Inputs)
+STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../OGF_STATE.json'))
 
 def get_active_project_id():
     """Finds the ID of the most recently created project."""
@@ -691,6 +696,67 @@ def audio_test(sound_profile):
     
     console.print("\n[bold cyan]Zero megabytes loaded. Pure math. Your i3 laptop is safe.[/bold cyan]")
 
+# ==========================================
+# DAY 25: THE INPUT HOLE (DETERMINISTIC REBINDING)
+# ==========================================
+@cli.group()
+def input():
+    """Day 25: Deterministic Input Mapping Commands."""
+    pass
+
+@input.command(name="rebind")
+@click.argument('action_name')
+@click.argument('new_key')
+def rebind_input(action_name, new_key):
+    """
+    The Reality Recompiler.
+    Instantly rewires a game control in the master OGF_STATE.json.
+    Usage: camera input rebind jump Spacebar
+    """
+    console.print(Panel(f"[bold cyan]Recompiling Reality: Binding '{action_name}' to '{new_key}'[/bold cyan]", title="Day 25: Input Engine"))
+    
+    # 1. Load the Master Save File
+    state_data = {"input_dna": []}
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state_data = json.load(f)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not read {STATE_FILE}. Creating new.[/yellow]")
+            
+    if "input_dna" not in state_data:
+        state_data["input_dna"] = []
+        
+    # 2. Find and Update the DNA
+    found = False
+    for rule in state_data["input_dna"]:
+        if rule.get("action_name") == action_name:
+            old_key = rule.get("hardware_trigger")
+            rule["hardware_trigger"] = new_key
+            found = True
+            console.print(f"[yellow]Updated existing rule: {action_name} ({old_key} -> {new_key})[/yellow]")
+            break
+            
+    # 3. If not found, append a new rule
+    if not found:
+        new_rule = {
+            "action_name": action_name,
+            "hardware_trigger": new_key,
+            "modifier_key": None,
+            "active_context": "gameplay"
+        }
+        state_data["input_dna"].append(new_rule)
+        console.print(f"[green]Created new rule: {action_name} -> {new_key}[/green]")
+        
+    # 4. Save back to disk
+    try:
+        with open(STATE_FILE, 'w') as f:
+            json.dump(state_data, f, indent=4)
+        console.print(f"\n[bold green]✅ SUCCESS! Master Save File ({os.path.basename(STATE_FILE)}) updated.[/bold green]")
+        console.print("[bold cyan]The Input Engine will automatically load this new map on next start.[/bold cyan]")
+    except Exception as e:
+        console.print(f"[bold red]Error saving state: {e}[/bold red]")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -698,6 +764,7 @@ cli.add_command(backend)
 cli.add_command(netcode)
 cli.add_command(telemetry) # Day 23 Addition
 cli.add_command(audio) # Day 24 Addition
+cli.add_command(input) # Day 25 Addition
 
 # ==========================================
 # 3. START THE ENGINE
