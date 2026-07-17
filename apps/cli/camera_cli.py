@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA
+# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
@@ -39,20 +39,22 @@ from packages.core.deployment_engine import DeploymentEngine
 from packages.core.netcode_engine import NetcodeEngine
 from packages.core.security_engine import sanitize_dna
 
-# --- DAY 23, 24 & 25 ADDITIONS: Telemetry, Audio & Input Models ---
+# --- DAY 23, 24, 25 & 26 ADDITIONS: Telemetry, Audio, Input & Mod Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
     PerformanceReport, BottleneckType,
     AudioDNA, # ADDED FOR DAY 24
-    InputDNA # ADDED FOR DAY 25
+    InputDNA, # ADDED FOR DAY 25
+    ModDNA, DramaBudget # ADDED FOR DAY 26
 )
 from packages.core.telemetry_engine import telemetry_brain
+from packages.core.modding_engine import engine as modding_engine # ADDED FOR DAY 26
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
 supabase = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
-# Path to the master save file for local DNA (like Inputs)
+# Path to the master save file for local DNA (like Inputs and Mods)
 STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../OGF_STATE.json'))
 
 def get_active_project_id():
@@ -757,6 +759,89 @@ def rebind_input(action_name, new_key):
     except Exception as e:
         console.print(f"[bold red]Error saving state: {e}[/bold red]")
 
+# ==========================================
+# DAY 26: THE MODDING HOLE (COMMUNITY DNA VAULT)
+# ==========================================
+@cli.group()
+def mod():
+    """Day 26: Manage Community DNA Mods (The Modding Hole)."""
+    pass
+
+@mod.command('list')
+def list_mods():
+    """Fetch and display approved mods from the Supabase Vault."""
+    if not supabase:
+        console.print("[red]⚠️ Supabase connection failed. Check your .env file.[/red]")
+        return
+
+    with console.status("[bold cyan]🔍 Querying the Community Vault...[/bold cyan]"):
+        try:
+            response = supabase.table('community_vault').select('id, mod_name, metadata').eq('status', 'approved').execute()
+            mods = response.data
+            
+            table = Table(title="🌐 COMMUNITY DNA VAULT (APPROVED)", show_header=True, header_style="bold magenta")
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Name", style="green")
+            table.add_column("Tags", style="yellow")
+            table.add_column("Version", style="dim")
+
+            if not mods:
+                console.print("[yellow]The Vault is empty. No approved mods yet.[/yellow]")
+                return
+
+            for m in mods:
+                tags = ", ".join(m.get('metadata', {}).get('tags', []))
+                version = m.get('metadata', {}).get('version', '1.0.0')
+                table.add_row(str(m['id']), m['mod_name'], tags, version)
+                
+            console.print(table)
+        except Exception as e:
+            console.print(f"[red]Error fetching mods: {e}[/red]")
+
+@mod.command('install')
+@click.argument('mod_id')
+def install_mod(mod_id):
+    """Download and safely inject a mod into OGF_STATE.json."""
+    if not supabase:
+        console.print("[red]⚠️ Supabase connection failed.[/red]")
+        return
+
+    with console.status(f"[bold cyan]⚡ INITIATING SAFE INJECTION PROTOCOL FOR {mod_id}...[/bold cyan]"):
+        try:
+            # 1. Fetch DNA
+            response = supabase.table('community_vault').select('mod_dna').eq('id', mod_id).single().execute()
+            mod_dna_dict = response.data['mod_dna']
+            
+            # 2. Validate (The Bouncer)
+            safe_mod = ModDNA(**mod_dna_dict)
+            console.print(f"[green]✓ DNA VALIDATED:[/green] {safe_mod.mod_name}")
+            
+            # 3. Load Local State
+            state_file = STATE_FILE
+            if not os.path.exists(state_file):
+                console.print("[yellow]No OGF_STATE.json found. Initializing fresh reality...[/yellow]")
+                current_world = WorldState()
+                full_state = {"world_state": current_world.model_dump()}
+            else:
+                with open(state_file, 'r') as f:
+                    full_state = json.load(f)
+                    current_world = WorldState(**full_state.get('world_state', {}))
+            
+            # 4. Inject (The Merger)
+            new_world = modding_engine.inject_mod(current_world, safe_mod, DramaBudget())
+            
+            # 5. Save
+            full_state['world_state'] = new_world.model_dump()
+            with open(state_file, 'w') as f:
+                json.dump(full_state, f, indent=4)
+                
+            console.print(f"[bold green]🚀 INJECTION COMPLETE.[/bold green] Reality updated with '{safe_mod.mod_name}'.")
+            
+        except ValueError as ve:
+            console.print(f"[red]⛔ INJECTION BLOCKED BY SANITIZER:[/red] {ve}")
+        except Exception as e:
+            console.print(f"[red]❌ INJECTION FAILED:[/red] {e}")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -765,6 +850,7 @@ cli.add_command(netcode)
 cli.add_command(telemetry) # Day 23 Addition
 cli.add_command(audio) # Day 24 Addition
 cli.add_command(input) # Day 25 Addition
+cli.add_command(mod) # Day 26 Addition
 
 # ==========================================
 # 3. START THE ENGINE

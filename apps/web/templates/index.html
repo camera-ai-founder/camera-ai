@@ -3,143 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera AI - Ontology Visualizer</title>
-    
-    <!-- Load Cytoscape.js via CDN -->
-    <script src="https://unpkg.com/cytoscape@3.23.0/dist/cytoscape.min.js"></script>
-    
+    <title>Genesis Engine - Live Canvas</title>
     <style>
-        body { 
-            margin: 0; 
-            padding: 20px; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: #1a1a1a;
-            color: #ffffff;
+        /* ==========================================
+           GENESIS ENGINE PURE CSS (Zero Dependencies)
+           ========================================== */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a; /* Deep slate background */
+            color: #e2e8f0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
         }
-        h1 { text-align: center; margin-bottom: 20px; }
-        
-        #cy {
-            width: 100%;
-            height: 75vh;
-            background-color: #2d2d2d;
-            border: 2px solid #444;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        header {
+            padding: 15px 30px;
+            background-color: #1e293b;
+            border-bottom: 2px solid #38bdf8; /* Neon cyan accent */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        
-        .instructions {
-            text-align: center;
-            margin-top: 10px;
-            color: #888;
+        h1 { margin: 0; font-size: 20px; letter-spacing: 1px; color: #38bdf8; }
+        .status-badge {
+            background: #064e3b;
+            color: #34d399;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        .panel {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-left {
+            flex: 2; /* Takes up more space */
+            border-right: 1px solid #334155;
+        }
+        .panel-right {
+            flex: 1;
+            background-color: #1e293b;
+        }
+        .panel-title {
             font-size: 14px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
         }
+        /* Cytoscape Container */
+        #cy {
+            flex: 1;
+            background-color: #020617;
+            border: 1px solid #334155;
+            border-radius: 8px;
+        }
+        /* Mod Loader Styles */
+        .mod-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .mod-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid #334155;
+        }
+        .mod-name { font-weight: 600; }
+        .btn-inject {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .btn-inject:hover { background: #1d4ed8; }
+        .btn-inject:disabled { background: #475569; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-    <h1>📷 Camera AI: Fractal Ontology Visualizer</h1>
-    
-    <div id="cy"></div>
-    
-    <p class="instructions">💡 Tip: Drag nodes to rearrange • Scroll to zoom • Click and drag background to pan</p>
+    <header>
+        <h1>GENESIS ENGINE // LIVE CANVAS</h1>
+        <span class="status-badge">SYSTEM ONLINE</span>
+    </header>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async function() {
+    <main>
+        <!-- LEFT PANEL: The Ontological Graph -->
+        <div class="panel panel-left">
+            <div class="panel-title">Ontological Node Graph</div>
+            <div id="cy"></div>
+        </div>
+
+        <!-- RIGHT PANEL: DAY 26 MOD LOADER -->
+        <div class="panel panel-right">
+            <div class="panel-title">Community DNA Vault</div>
+            <p style="color: #94a3b8; font-size: 13px; margin-top: 0;">
+                Safe, mathematically validated mods. Click Inject to merge reality.
+            </p>
             
-            // Fetch the data from our Flask backend
-            const response = await fetch('/api/graph');
-            const graphData = await response.json();
+            <ul id="mod-list" class="mod-list">
+                <li style="color: #64748b; text-align: center; margin-top: 20px;">Loading Vault...</li>
+            </ul>
+        </div>
+    </main>
 
-            // Initialize Cytoscape.js with full interactivity
-            const cy = cytoscape({
-                container: document.getElementById('cy'),
+    <!-- ==========================================
+         JAVASCRIPT: THE NERVOUS SYSTEM
+         ========================================== -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+    <script>
+        // -----------------------------------------
+        // 1. DAY 26: THE MOD LOADER LOGIC
+        // -----------------------------------------
+        async function loadMods() {
+            try {
+                const res = await fetch('/api/mods');
+                if (!res.ok) throw new Error('Network response was not ok');
+                const mods = await res.json();
+                const list = document.getElementById('mod-list');
+                list.innerHTML = ''; 
                 
-                elements: graphData,
-
-                style: [
-                    {
-                        selector: 'node',
-                        style: {
-                            'background-color': '#0074D9',
-                            'label': 'data(label)',
-                            'color': '#fff',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '14px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '100px',
-                            'width': 60,
-                            'height': 60
-                        }
-                    },
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 3,
-                            'line-color': '#888',
-                            'target-arrow-color': '#ccc',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'arrow-scale': 1.2
-                        }
-                    },
-                    {
-                        selector: 'node:active',
-                        style: {
-                            'background-color': '#FF6B6B',
-                            'border-width': 3,
-                            'border-color': '#fff'
-                        }
-                    }
-                ],
-
-                layout: {
-                    name: 'cose',
-                    animate: true,
-                    animationDuration: 1000,
-                    padding: 50,
-                    nodeRepulsion: 4500,
-                    edgeElasticity: 100
-                },
-
-                // Enable all user interactions
-                boxSelectionEnabled: true,
-                styleEnabled: true,
-                zoomingEnabled: true,
-                userZoomingEnabled: true,
-                panningEnabled: true,
-                userPanningEnabled: true,
-                wheelSensitivity: 1,
-                selectionType: 'single',
-                autolock: false,
-                autoungrabify: false,
-                autounselectify: false
-            });
-
-            // Add click event to nodes
-            cy.on('tap', 'node', function(evt){
-                var node = evt.target;
-                console.log('Clicked node: ' + node.data('label'));
+                if (!mods || mods.length === 0) {
+                    list.innerHTML = '<li style="color: #64748b; text-align: center; margin-top: 20px;">No approved mods available yet.</li>';
+                    return;
+                }
                 
-                // Visual feedback when clicking
-                node.style({
-                    'background-color': '#FF6B6B',
-                    'border-width': 3,
-                    'border-color': '#fff'
+                mods.forEach(mod => {
+                    const li = document.createElement('li');
+                    li.className = 'mod-item';
+                    li.innerHTML = `
+                        <span class="mod-name">${mod.mod_name}</span>
+                        <button class="btn-inject" onclick="installMod('${mod.id}', '${mod.mod_name}', this)">
+                            Inject
+                        </button>
+                    `;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                console.error("Failed to load mods", err);
+                document.getElementById('mod-list').innerHTML = '<li style="color: #ef4444;">Error connecting to Vault.</li>';
+            }
+        }
+
+        async function installMod(modId, modName, btnElement) {
+            btnElement.disabled = true;
+            btnElement.innerText = 'Injecting...';
+            
+            try {
+                const response = await fetch('/api/mods/install', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mod_id: modId })
                 });
                 
-                // Reset other nodes after 1 second
-                setTimeout(() => {
-                    cy.nodes().style({
-                        'background-color': '#0074D9',
-                        'border-width': 0
-                    });
-                }, 1000);
-            });
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Success! ${modName} is now part of your reality.`);
+                    loadGraph(); // Refresh the graph to show the new injected nodes!
+                } else {
+                    alert(`Injection Blocked by Sanitizer: ${result.message}`);
+                }
+            } catch (error) {
+                console.error("Install failed", error);
+                alert("Network error during injection.");
+            } finally {
+                btnElement.disabled = false;
+                btnElement.innerText = 'Inject';
+            }
+        }
 
-            console.log('Camera AI Visualizer loaded successfully!');
+        // -----------------------------------------
+        // 2. EXISTING: THE CYTOSCAPE GRAPH LOGIC
+        // -----------------------------------------
+        let cy;
+        async function loadGraph() {
+            try {
+                const res = await fetch('/api/graph');
+                const data = await res.json();
+                
+                if (!cy) {
+                    cy = cytoscape({
+                        container: document.getElementById('cy'),
+                        style: [
+                            { selector: 'node', style: { 'background-color': '#38bdf8', 'label': 'data(label)', 'color': '#fff', 'text-valign': 'center', 'font-size': '10px' } },
+                            { selector: 'edge', style: { 'width': 2, 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } }
+                        ],
+                        layout: { name: 'cose', padding: 30 }
+                    });
+                } else {
+                    cy.elements().remove();
+                }
+
+                if (data.nodes && data.nodes.length > 0) {
+                    cy.add(data.nodes);
+                    cy.add(data.edges);
+                    cy.layout({ name: 'cose' }).run();
+                }
+            } catch (err) {
+                console.error("Failed to load graph", err);
+            }
+        }
+
+        // -----------------------------------------
+        // 3. INITIALIZATION
+        // -----------------------------------------
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMods();
+            loadGraph();
         });
     </script>
-
 </body>
 </html>

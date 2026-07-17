@@ -323,4 +323,81 @@ def trigger_ai_healing():
 # RUN THE SERVER
 # ==========================================
 if __name__ == '__main__':
+    # ==========================================
+# DAY 26: THE MOD LOADER API
+# ==========================================
+try:
+    from packages.core.models import ModDNA, DramaBudget, WorldState
+    from packages.core.modding_engine import engine as modding_engine
+except ImportError:
+    ModDNA = None
+    DramaBudget = None
+    WorldState = None
+    modding_engine = None
+
+@app.route('/api/mods', methods=['GET'])
+def get_approved_mods():
+    """Fetches only safe, approved mods for the UI to display."""
+    if not supabase:
+        return jsonify({"error": "Supabase offline"}), 500
+    try:
+        response = supabase.table('community_vault') \
+            .select('id, mod_name, metadata') \
+            .eq('status', 'approved') \
+            .execute()
+        return jsonify(response.data), 200
+    except Exception as e:
+        logger.error(f"Error fetching mods: {e}")
+        return jsonify({"error": "Could not fetch mods"}), 500
+
+@app.route('/api/mods/install', methods=['POST'])
+def install_mod():
+    """Takes a Mod ID, fetches the safe JSON, and injects it into OGF_STATE."""
+    if not supabase or not ModDNA or not modding_engine:
+        return jsonify({"error": "Modding system not available"}), 500
+        
+    try:
+        data = request.json
+        mod_id = data.get('mod_id')
+
+        # 1. Fetch the pure JSON from our secure vault
+        response = supabase.table('community_vault') \
+            .select('mod_dna, mod_name') \
+            .eq('id', mod_id) \
+            .single() \
+            .execute()
+            
+        mod_dna_dict = response.data['mod_dna']
+        mod_name = response.data['mod_name']
+
+        # 2. Force it through the Pydantic Bouncer
+        safe_mod = ModDNA(**mod_dna_dict)
+
+        # 3. Get current World State and Drama Budget
+        current_state_dict = load_current_state()
+        # Extract the world_state dictionary safely
+        ws_dict = current_state_dict.get("world_state", current_state_dict)
+        current_world = WorldState(**ws_dict)
+        current_budget = DramaBudget() 
+
+        # 4. Trigger the Safe Injection Engine!
+        new_world = modding_engine.inject_mod(current_world, safe_mod, current_budget)
+        
+        # 5. Save back to OGF_STATE.json using your existing helper
+        current_state_dict["world_state"] = new_world.model_dump(mode='json')
+        save_current_state(current_state_dict)
+        
+        logger.info(f"Successfully injected mod: {safe_mod.mod_name}")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Mod '{safe_mod.mod_name}' safely injected into reality!"
+        }), 200
+
+    except ValueError as ve:
+        # This catches our Sanitizer rejections!
+        return jsonify({"success": False, "message": str(ve)}), 400
+    except Exception as e:
+        logger.error(f"Error installing mod: {e}")
+        return jsonify({"success": False, "message": f"Injection failed: {str(e)}"}), 500
     app.run(host='0.0.0.0', port=8080, debug=True)

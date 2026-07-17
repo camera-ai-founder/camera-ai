@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Literal, Union
+from typing import Optional, List, Dict, Literal, Union, Any
 from enum import Enum
 import uuid
 import time
@@ -432,4 +432,28 @@ class DeployDNA(BaseModel):
 # ==========================================================
 # The Telemetry Engine (Step 3) imports 'GenesisRenderer' directly.
 # We alias it to our master PriorityDualEngineDNA to prevent import errors.
-GenesisRenderer = PriorityDualEngineDNA
+GenesisRenderer = PriorityDualEngineDNA 
+
+# ==========================================================
+# DAY 26: THE MODDING HOLE (SAFE INJECTION)
+# ==========================================================
+class ModMetadata(BaseModel):
+    """
+    Metadata for searching and categorizing the mod in the Community Vault.
+    """
+    model_config = ConfigDict(extra="allow")
+    version: str = "1.0.0"
+    tags: List[str] = Field(default_factory=list)
+    description: str = ""
+
+class ModDNA(BaseModel):
+    """
+    The DNA of a community-created mod. 
+    Notice there is NO raw code here, only structured JSON data.
+    """
+    model_config = ConfigDict(extra="allow")
+    mod_name: str
+    author_id: str # The Supabase UUID of the creator
+    injected_nodes: List[Dict[str, Any]] = Field(default_factory=list) # The pure Ontological Nodes being added
+    dependency_tokens: List[str] = Field(default_factory=list) # Ensures the user has the base assets required
+    metadata: ModMetadata = Field(default_factory=ModMetadata)

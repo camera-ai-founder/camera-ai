@@ -7,14 +7,16 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24 & 25 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24, 25 & 26 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
     PathingIntent, LogicDNA, Route, DeployDNA, StateDelta, SecurityDNA,
     AudioDNA, # ADDED FOR DAY 24
-    InputDNA # ADDED FOR DAY 25
+    InputDNA, # ADDED FOR DAY 25
+    ModDNA, # ADDED FOR DAY 26
+    ModMetadata # ADDED FOR DAY 26
 )
 
 # ==========================================
@@ -526,7 +528,7 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
         
         # The Pydantic Bouncer catches any bad data here
         intent = PathingIntent.model_validate_json(raw_json)
-        print(f"Traffic Director issued PathingIntent to {intent.target_coords}!")
+        print(f"Traffic Director issued Pathing Intent to {intent.target_coords}!")
         return intent
         
     except Exception as e:
@@ -899,3 +901,74 @@ def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
     except Exception as e:
         print(f"Brain Error (Control Director Failsafe): {e}")
         return [] # Returns an empty list so the engine doesn't crash
+
+# ==========================================
+# 17. DAY 26: THE MOD CURATOR (AI Librarian)
+# ==========================================
+class ModCurator:
+    """
+    The AI Librarian. It reads raw Mod DNA and generates perfect, 
+    searchable tags so players can easily find community content.
+    """
+    def generate_tags(self, mod: ModDNA) -> ModMetadata:
+        """
+        Sends the mod's nodes to Groq and asks for semantic tags.
+        """
+        if not client:
+            print("Error: Groq client is not initialized.")
+            return mod.metadata
+
+        print(f"Curator is analyzing mod: {mod.mod_name}")
+        
+        # We extract just the essential text from the JSON to save tokens.
+        mod_summary = {
+            "mod_name": mod.mod_name,
+            "nodes_count": len(mod.injected_nodes),
+            "sample_tags": [n.get("semantic_tags", []) for n in mod.injected_nodes[:3]] # Just a peek
+        }
+
+        prompt = f"""
+        You are the Master Mod Curator for a game engine. 
+        Analyze this mod's data: {json.dumps(mod_summary)}
+        
+        Generate 3 to 5 highly relevant, consistent semantic tags for this mod 
+        (e.g., 'cyberpunk', 'cozy', 'high_tension', 'new_biome', 'vehicle').
+        
+        CRITICAL RULE: You MUST return ONLY a valid JSON object with a key "tags" containing a list of strings. 
+        Example: {{"tags": ["cyberpunk", "vehicle", "neon"]}}
+        
+        {SECURITY_GUARDRAILS_PROMPT}
+        """
+
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile", 
+                temperature=0.2, # Keep it strict and predictable
+                max_tokens=50,
+                response_format={"type": "json_object"} # Forces valid JSON
+            )
+            
+            raw_response = chat_completion.choices[0].message.content
+            parsed = json.loads(raw_response)
+            
+            tags_list = parsed.get("tags", [])
+            if not isinstance(tags_list, list):
+                tags_list = []
+                
+            print(f"Curator generated tags: {tags_list}")
+            
+            # Update and return the metadata with the new AI tags
+            new_metadata_dict = mod.metadata.model_dump()
+            # Ensure we don't add duplicates
+            existing_tags = set(new_metadata_dict.get("tags", []))
+            for tag in tags_list:
+                if isinstance(tag, str) and tag not in existing_tags:
+                    new_metadata_dict["tags"].append(tag)
+                    
+            return ModMetadata(**new_metadata_dict)
+
+        except Exception as e:
+            print(f"Curator failed to generate tags for {mod.mod_name}: {e}")
+            # If the AI fails, we just keep the original tags. The game doesn't crash.
+            return mod.metadata
