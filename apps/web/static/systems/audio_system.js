@@ -1,5 +1,6 @@
 // File: apps/web/static/systems/audio_system.js
 // THE DSP SYNTHESIZER: Pure Math, Zero Files, Now in 3D Space.
+// DAY 27 UPDATE: Added Audio Cadence Shift for Localization.
 
 class AudioSystem {
     constructor() {
@@ -7,6 +8,15 @@ class AudioSystem {
         this.masterGain = null;
         this.listener = null;
         this.isInitialized = false;
+        
+        // DAY 27: Store the Localization DNA to apply cadence shifts
+        this.localeDNA = null; 
+    }
+
+    // DAY 27: Method to inject LocaleDNA into the audio engine
+    setLocale(localeDNA) {
+        this.localeDNA = localeDNA;
+        console.log(`[AudioSystem] Locale set to: ${this.localeDNA?.target_language || 'en'} | Cadence Shift: ${this.localeDNA?.audio_cadence_shift || 0.0}`);
     }
 
     // We initialize the AudioContext only when needed to save resources
@@ -45,7 +55,7 @@ class AudioSystem {
     }
 
     // ==========================================
-    // NEW STEP 3: SPATIAL AUDIO (THE 3D PANNER)
+    // SPATIAL AUDIO (THE 3D PANNER)
     // ==========================================
     
     // This updates our "Ears" so the browser knows where the Camera is looking
@@ -65,6 +75,15 @@ class AudioSystem {
         if (!this.isInitialized) this.init();
 
         const now = this.audioContext.currentTime;
+
+        // DAY 27: AUDIO CADENCE SHIFT
+        // Read the shift value (e.g., 0.1 for fast languages, -0.1 for slow)
+        const cadenceShift = this.localeDNA?.audio_cadence_shift || 0.0;
+        
+        // Fast languages (positive shift) get a smaller time multiplier (faster envelope)
+        // Slow languages (negative shift) get a larger time multiplier (slower envelope)
+        // We use Math.max to ensure the time never drops below 10% to prevent audio glitches
+        const timeMultiplier = Math.max(0.1, 1.0 - (cadenceShift * 0.5));
 
         // 1. Create the PannerNode (The 3D Spatializer)
         const panner = this.audioContext.createPanner();
@@ -86,8 +105,13 @@ class AudioSystem {
         // 2. Create the Envelope (The Volume Shape)
         const gainNode = this.audioContext.createGain();
         gainNode.gain.setValueAtTime(0, now); // Start at zero volume
-        gainNode.gain.linearRampToValueAtTime(1, now + dna.envelope_attack); 
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + dna.envelope_attack + dna.envelope_decay);
+        
+        // DAY 27: Apply timeMultiplier to attack and decay
+        const finalAttack = dna.envelope_attack * timeMultiplier;
+        const finalDecay = dna.envelope_decay * timeMultiplier;
+        
+        gainNode.gain.linearRampToValueAtTime(1, now + finalAttack); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + finalAttack + finalDecay);
 
         // 3. Create the Filter (The Tone Shaper)
         let lastNode = gainNode;
@@ -104,10 +128,14 @@ class AudioSystem {
         if (dna.waveform_type === "noise") {
             source = this.audioContext.createBufferSource();
             source.buffer = this.createNoiseBuffer();
+            // DAY 27: Shift noise speed using playbackRate
+            source.playbackRate.value = 1.0 + (cadenceShift * 0.5);
         } else {
             source = this.audioContext.createOscillator();
             source.type = dna.waveform_type;
             source.frequency.setValueAtTime(dna.base_frequency, now);
+            // DAY 27: Shift oscillator "weight" using detune (in cents)
+            source.detune.setValueAtTime(cadenceShift * 100, now);
         }
 
         // 5. Wire it all together in the correct order!
@@ -117,7 +145,7 @@ class AudioSystem {
 
         // 6. Play the sound and clean it up when finished
         source.start(now);
-        source.stop(now + dna.envelope_attack + dna.envelope_decay + 0.1);
+        source.stop(now + finalAttack + finalDecay + 0.1);
     }
 
     // ==========================================

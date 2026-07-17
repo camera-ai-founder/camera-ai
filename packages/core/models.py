@@ -263,6 +263,41 @@ class InputDNA(BaseModel):
     active_context: str = Field("gameplay", description="The context where this is valid: 'gameplay', 'ui', or 'cinematic'.")
 
 # ==========================================================
+# DAY 27: THE LOCALIZATION HOLE (SEMANTIC & FLUID)
+# ==========================================================
+class FluidUIRules(BaseModel):
+    """
+    Mathematical rules to prevent UI layouts from breaking 
+    when translating to languages with long words (like German).
+    """
+    model_config = ConfigDict(extra="allow")
+    max_word_length_tolerance: int = Field(default=20, description="Max characters before forced wrapping or scaling")
+    force_text_wrap: bool = Field(default=True)
+    flex_direction_fallback: str = Field(default="column", description="If row fails, stack vertically")
+    scale_font_down_if_overflow: bool = Field(default=True)
+
+class LocaleDNA(BaseModel):
+    """
+    The master configuration for language and cultural adaptation.
+    This tells the UI Compiler and Audio Engine how to behave for a specific region.
+    """
+    model_config = ConfigDict(extra="allow")
+    target_language: str = Field(default="en", description="e.g., 'en', 'es', 'ja', 'de'")
+    fluid_ui_rules: FluidUIRules = Field(default_factory=FluidUIRules)
+    audio_cadence_shift: float = Field(default=0.0, description="0.0 is normal. Positive speeds up rhythm, negative slows it down.")
+    text_direction: str = Field(default="ltr", description="'ltr' (Left-to-Right) or 'rtl' (Right-to-Left like Arabic)")
+
+class SemanticToken(BaseModel):
+    """
+    A universal concept ID. This REPLACES hardcoded English strings.
+    The Brain only thinks in these concepts. The Engine translates them later.
+    """
+    model_config = ConfigDict(extra="allow")
+    concept_id: str = Field(..., description="e.g., 'greeting_hostile', 'combat_warn_fire'")
+    intensity: float = Field(default=1.0, description="0.0 to 1.0. Modifies how strongly the concept is expressed.")
+    context_vars: Dict[str, Any] = Field(default_factory=dict, description="For injecting variables like {'player_name': 'Sarah'}")
+
+# ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
 # ==========================================================
 class OntologicalNode(BaseModel):
@@ -316,6 +351,9 @@ class AppDNA(BaseModel):
     
     required_components: List[AppComponent] = Field(default_factory=list)
     telemetry: TelemetryDNA = Field(default_factory=TelemetryDNA)
+    
+    # DAY 27 ADDITION: The Master Locale Switch
+    locale: LocaleDNA = Field(default_factory=LocaleDNA)
 
 # ==========================================================
 # DAY 12, 15, 16, 17, 18, 20, 21 & 22 RESTORATION

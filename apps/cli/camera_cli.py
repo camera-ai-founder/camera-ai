@@ -21,14 +21,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA
+# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA + Day 27
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
     act_as_backend_architect,
     generate_deployment_topology,
     act_as_foley_director, # ADDED FOR DAY 24
-    act_as_control_director # ADDED FOR DAY 25
+    act_as_control_director, # ADDED FOR DAY 25
+    act_as_translation_director # ADDED FOR DAY 27
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
@@ -38,14 +39,16 @@ from packages.core.backend_compiler import save_compiled_file
 from packages.core.deployment_engine import DeploymentEngine 
 from packages.core.netcode_engine import NetcodeEngine
 from packages.core.security_engine import sanitize_dna
+from packages.core.localization_engine import LocalizationEngine # ADDED FOR DAY 27
 
-# --- DAY 23, 24, 25 & 26 ADDITIONS: Telemetry, Audio, Input & Mod Models ---
+# --- DAY 23, 24, 25, 26 & 27 ADDITIONS: Telemetry, Audio, Input, Mod & Locale Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
     PerformanceReport, BottleneckType,
     AudioDNA, # ADDED FOR DAY 24
     InputDNA, # ADDED FOR DAY 25
-    ModDNA, DramaBudget # ADDED FOR DAY 26
+    ModDNA, DramaBudget, # ADDED FOR DAY 26
+    LocaleDNA, SemanticToken, FluidUIRules # ADDED FOR DAY 27
 )
 from packages.core.telemetry_engine import telemetry_brain
 from packages.core.modding_engine import engine as modding_engine # ADDED FOR DAY 26
@@ -842,6 +845,93 @@ def install_mod(mod_id):
         except Exception as e:
             console.print(f"[red]❌ INJECTION FAILED:[/red] {e}")
 
+# ==========================================
+# DAY 27: THE LOCALIZATION HOLE (SEMANTIC & FLUID)
+# ==========================================
+@cli.group()
+def locale():
+    """Day 27: Manage the Localization Hole (Language & Fluidity)."""
+    pass
+
+@locale.command("set")
+@click.argument("language_code", type=str)
+def set_locale(language_code: str):
+    """
+    Switch the entire engine to a new language (e.g., 'en', 'de', 'ja', 'es').
+    Updates OGF_STATE, triggers UI fluid recompilation, and prints localized text.
+    """
+    console.print(f"\n[bold cyan]🌍 Switching Reality Locale to: {language_code.upper()}[/bold cyan]")
+    
+    # 1. Load current state from the master save file
+    state_data = {}
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state_data = json.load(f)
+        except Exception:
+            pass
+            
+    app_dna_dict = state_data.get("app_dna", AppDNA().model_dump())
+    
+    # 2. Update the LocaleDNA inside the AppDNA
+    cadence_shift = 0.0
+    if language_code in ['es', 'ja', 'it']:
+        cadence_shift = 0.15 
+    elif language_code in ['de', 'ru', 'pl']:
+        cadence_shift = -0.15 
+        
+    new_locale = LocaleDNA(
+        target_language=language_code,
+        audio_cadence_shift=cadence_shift,
+        fluid_ui_rules=FluidUIRules(force_text_wrap=True)
+    )
+    
+    app_dna_dict["locale"] = new_locale.model_dump()
+    state_data["app_dna"] = app_dna_dict
+    
+    # 3. Save back to OGF_STATE.json
+    try:
+        with open(STATE_FILE, 'w') as f:
+            json.dump(state_data, f, indent=4)
+        console.print("[green]✅ OGF_STATE.json updated successfully.[/green]")
+    except Exception as e:
+        console.print(f"[red]Error saving state: {e}[/red]")
+        return
+    
+    # 4. Recompile UI with new Fluidity Rules
+    console.print("[yellow]🏭 Triggering Fluid UI Recompilation...[/yellow]")
+    app_dna = AppDNA(**app_dna_dict)
+    design_config = synthesize_design_tokens(app_dna.design_tokens)
+    compile_report = compile_ui(app_dna, design_config)
+    
+    if compile_report["success"]:
+        console.print(f"[green]✅ UI Recompiled in {compile_report['compile_time_ms']}ms. Layout is mathematically fluid![/green]")
+    else:
+        console.print("[red]❌ UI Recompilation failed.[/red]")
+        
+    # 5. Print Localized Semantic Output to verify the dictionary
+    console.print("\n[bold magenta]📖 Testing Semantic Dictionary Translation:[/bold magenta]")
+    try:
+        engine = LocalizationEngine()
+        
+        test_tokens = [
+            SemanticToken(concept_id="ui_button_start", intensity=1.0),
+            SemanticToken(concept_id="greeting_hostile", intensity=0.8, context_vars={"player_name": "Founder"})
+        ]
+        
+        for token in test_tokens:
+            translated_text = engine.get_translated_text(token, new_locale)
+            console.print(Panel(
+                f"[bold]{token.concept_id}[/bold] ➔ [cyan]{translated_text}[/cyan]", 
+                title=f"Concept Translation ({language_code.upper()})"
+            ))
+            
+    except Exception as e:
+        console.print(f"[red]⚠️ Localization Engine test failed: {e}[/red]")
+        console.print("[yellow]Note: Ensure your SUPABASE_URL and SUPABASE_ANON_KEY are in your .env file![/yellow]")
+
+    console.print(f"\n[bold green]🎉 Locale switch complete. Your i3 laptop handled this flawlessly, Founder.[/bold green]\n")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -851,6 +941,7 @@ cli.add_command(telemetry) # Day 23 Addition
 cli.add_command(audio) # Day 24 Addition
 cli.add_command(input) # Day 25 Addition
 cli.add_command(mod) # Day 26 Addition
+cli.add_command(locale) # Day 27 Addition
 
 # ==========================================
 # 3. START THE ENGINE

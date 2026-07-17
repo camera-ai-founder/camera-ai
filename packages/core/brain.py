@@ -7,7 +7,7 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24, 25 & 26 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24, 25, 26 & 27 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
@@ -16,7 +16,9 @@ from .models import (
     AudioDNA, # ADDED FOR DAY 24
     InputDNA, # ADDED FOR DAY 25
     ModDNA, # ADDED FOR DAY 26
-    ModMetadata # ADDED FOR DAY 26
+    ModMetadata, # ADDED FOR DAY 26
+    SemanticToken, # ADDED FOR DAY 27
+    LocaleDNA # ADDED FOR DAY 27
 )
 
 # ==========================================
@@ -399,10 +401,6 @@ def generate_genesis_scene(scene_prompt: str) -> dict:
 # 10. DAY 16: THE ECOSYSTEM DIRECTOR (Biome Math)
 # ==========================================
 def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
-    """
-    Upgrades the Brain to design cohesive, mathematical ecosystems.
-    Forces Groq to output strict BiomeDNA JSON using an exact template.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return BiomeDNA(
@@ -474,17 +472,12 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
 # 11. DAY 17: THE TRAFFIC DIRECTOR (Navigation Intent)
 # ==========================================
 def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) -> PathingIntent:
-    """
-    The Traffic Director.
-    Forces the AI to output a strict PathingIntent JSON.
-    It decides WHERE the entity wants to go. The Math Engine will handle HOW.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return PathingIntent(
             entity_id=entity_id,
             start_coords=start_coords,
-            target_coords=start_coords # Safe fallback: stay put
+            target_coords=start_coords
         )
 
     print(f"Traffic Director is routing Entity '{entity_id}'...")
@@ -526,7 +519,6 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
         
         raw_json = response.choices[0].message.content
         
-        # The Pydantic Bouncer catches any bad data here
         intent = PathingIntent.model_validate_json(raw_json)
         print(f"Traffic Director issued Pathing Intent to {intent.target_coords}!")
         return intent
@@ -536,17 +528,13 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
         return PathingIntent(
             entity_id=entity_id,
             start_coords=start_coords,
-            target_coords=start_coords # Safe fallback: stay put
+            target_coords=start_coords
         )
 
 # ==========================================
 # 12. DAY 18: THE BACKEND ARCHITECT DIRECTOR (FIXED TEMPLATE)
 # ==========================================
 def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
-    """
-    Asks the Groq AI to act as a Backend Architect.
-    It MUST fill out the LogicDNA form using EXACT key names.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return LogicDNA(
@@ -595,19 +583,17 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"}, 
-            temperature=0.1 # Keep it extremely strict and deterministic
+            temperature=0.1
         )
         
         raw_json = response.choices[0].message.content
         
-        # Pydantic acts as our bouncer. If the AI broke the rules, this catches it.
         dna = LogicDNA.model_validate_json(raw_json)
         print("Backend Architect generated a flawless LogicDNA!")
         return dna
         
     except Exception as e:
         print(f"[ERROR] The Architect Brain failed to fill out the form: {e}")
-        # Return a safe fallback so the compiler doesn't crash the app
         return LogicDNA(
             entity_name="Fallback",
             routes=[Route(method="GET", path="/fallback")],
@@ -619,11 +605,6 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
 # 13. DAY 20: THE DEVOPS DIRECTOR (Deployment Topology)
 # ==========================================
 def generate_deployment_topology(world_state: WorldState, app_complexity: str = "lightweight") -> DeployDNA:
-    """
-    DAY 20: THE DEVOPS DIRECTOR.
-    Analyzes the world state and complexity to output perfect DeployDNA.
-    The AI determines the topology; the Engine writes the scripts.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return DeployDNA(
@@ -673,12 +654,11 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            response_format={"type": "json_object"} # Forces Groq to speak only in JSON
+            response_format={"type": "json_object"}
         )
         
         raw_json = response.choices[0].message.content
         
-        # Pydantic forces the raw JSON into our strict DeployDNA model
         deploy_dna = DeployDNA.model_validate_json(raw_json)
         print("DevOps Director generated flawless DeployDNA!")
         return deploy_dna
@@ -696,19 +676,12 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
 # 14. DAY 21: THE MULTIPLAYER DIRECTOR (BRAIN UPGRADE)
 # ==========================================
 def generate_multiplayer_intent(action_description: str, current_world_state: dict) -> StateDelta:
-    """
-    The Day 21 Magic. 
-    We tell the Brain what happened in plain English. 
-    The Brain acts as the Multiplayer Director and outputs a pure, mathematical StateDelta.
-    It doesn't write network code; it just fills out the Delta form!
-    """
     if not client:
         print("Error: Groq client is not initialized.")
-        return StateDelta() # Fallback empty delta
+        return StateDelta()
 
     print(f"Multiplayer Director is analyzing intent for: '{action_description}'...")
     
-    # We create a strict system prompt using our Pydantic schema's JSON structure
     delta_schema = StateDelta.model_json_schema()
     
     system_prompt = f"""
@@ -740,15 +713,12 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1 # Keep it very low for strict math and JSON adherence
+            temperature=0.1
         )
         
         raw_json_string = response.choices[0].message.content
-        
-        # Parse the raw JSON string into a Python dictionary
         raw_dict = json.loads(raw_json_string)
         
-        # Force it through our Pydantic Bouncer
         validated_delta = StateDelta(**raw_dict)
         print("Multiplayer Director generated a flawless StateDelta!")
         return validated_delta
@@ -761,15 +731,9 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
 # 15. DAY 24: THE FOLEY DIRECTOR (Procedural Audio)
 # ==========================================
 def act_as_foley_director(entity_description: str) -> AudioDNA:
-    """
-    DAY 24: THE FOLEY DIRECTOR.
-    Forces the AI to act as a Sound Designer.
-    Instead of picking an audio file, it generates the mathematical AudioDNA
-    for the entity (like a hum for a neon sign, or a hiss for a steam vent).
-    """
     if not client:
         print("Error: Groq client is not initialized.")
-        return AudioDNA() # Safe silent fallback
+        return AudioDNA()
 
     print(f"Foley Director is designing the soundscape for: '{entity_description}'...")
     
@@ -811,32 +775,26 @@ def act_as_foley_director(entity_description: str) -> AudioDNA:
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.6 # Creative but structured
+            temperature=0.6
         )
         
         raw_json = response.choices[0].message.content
         
-        # Pydantic forces the raw JSON into our strict AudioDNA model
         audio_dna = AudioDNA.model_validate_json(raw_json)
         print("Foley Director generated flawless AudioDNA!")
         return audio_dna
         
     except Exception as e:
         print(f"Brain Error (Foley Director Failsafe): {e}")
-        return AudioDNA() # Returns a default, safe silent hum
+        return AudioDNA()
 
 # ==========================================
 # 16. DAY 25: THE CONTROL DIRECTOR (Input Wiring)
 # ==========================================
 def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
-    """
-    DAY 25: THE CONTROL DIRECTOR.
-    When the Brain invents a new mechanic (like a jetpack or vehicle),
-    it automatically invents the InputDNA so the player can control it immediately.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
-        return [] # Safe empty list
+        return []
 
     print(f"Control Director is wiring inputs for: '{mechanic_description}'...")
     
@@ -891,7 +849,6 @@ def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
         raw_json = response.choices[0].message.content
         parsed_data = json.loads(raw_json)
         
-        # Extract the list and force it through our Pydantic Bouncer
         inputs_list = parsed_data.get("inputs", [])
         validated_inputs = [InputDNA(**item) for item in inputs_list]
         
@@ -900,31 +857,23 @@ def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
         
     except Exception as e:
         print(f"Brain Error (Control Director Failsafe): {e}")
-        return [] # Returns an empty list so the engine doesn't crash
+        return []
 
 # ==========================================
 # 17. DAY 26: THE MOD CURATOR (AI Librarian)
 # ==========================================
 class ModCurator:
-    """
-    The AI Librarian. It reads raw Mod DNA and generates perfect, 
-    searchable tags so players can easily find community content.
-    """
     def generate_tags(self, mod: ModDNA) -> ModMetadata:
-        """
-        Sends the mod's nodes to Groq and asks for semantic tags.
-        """
         if not client:
             print("Error: Groq client is not initialized.")
             return mod.metadata
 
         print(f"Curator is analyzing mod: {mod.mod_name}")
         
-        # We extract just the essential text from the JSON to save tokens.
         mod_summary = {
             "mod_name": mod.mod_name,
             "nodes_count": len(mod.injected_nodes),
-            "sample_tags": [n.get("semantic_tags", []) for n in mod.injected_nodes[:3]] # Just a peek
+            "sample_tags": [n.get("semantic_tags", []) for n in mod.injected_nodes[:3]]
         }
 
         prompt = f"""
@@ -944,9 +893,9 @@ class ModCurator:
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="llama-3.3-70b-versatile", 
-                temperature=0.2, # Keep it strict and predictable
+                temperature=0.2,
                 max_tokens=50,
-                response_format={"type": "json_object"} # Forces valid JSON
+                response_format={"type": "json_object"}
             )
             
             raw_response = chat_completion.choices[0].message.content
@@ -958,9 +907,7 @@ class ModCurator:
                 
             print(f"Curator generated tags: {tags_list}")
             
-            # Update and return the metadata with the new AI tags
             new_metadata_dict = mod.metadata.model_dump()
-            # Ensure we don't add duplicates
             existing_tags = set(new_metadata_dict.get("tags", []))
             for tag in tags_list:
                 if isinstance(tag, str) and tag not in existing_tags:
@@ -970,5 +917,89 @@ class ModCurator:
 
         except Exception as e:
             print(f"Curator failed to generate tags for {mod.mod_name}: {e}")
-            # If the AI fails, we just keep the original tags. The game doesn't crash.
             return mod.metadata
+
+
+# ==========================================
+# 18. DAY 27: THE TRANSLATION DIRECTOR (Semantic Dialogue)
+# ==========================================
+def act_as_translation_director(narrative_context: str, locale: LocaleDNA) -> List[SemanticToken]:
+    """
+    DAY 27: THE TRANSLATION DIRECTOR.
+    Forces the AI to act as a Universal Concept Generator.
+    It is STRICTLY FORBIDDEN from outputting raw human text (English, German, etc.).
+    It MUST output only SemanticTokens (concept_ids) so the Localization Engine 
+    can map them perfectly to any language in the Supabase Dictionary.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return [] # Safe empty list
+
+    print(f"Translation Director is extracting concepts for: '{narrative_context}'...")
+    
+    system_prompt = f"""
+    You are the Translation Director for the Ontological Genesis Framework.
+    Your absolute rule: You are COMPLETELY FORBIDDEN from writing human words, sentences, or raw text.
+    You DO NOT output English, German, Spanish, or any human language.
+    
+    You ONLY output Universal Concepts using SemanticTokens (concept_ids).
+    
+    If the narrative requires the UI to say "Start Game", you DO NOT output "Start Game". 
+    You output the concept_id: "ui_button_start".
+    If an NPC needs to say "Halt! Who goes there?", you output the concept_id: "greeting_hostile".
+    
+    You MUST output ONLY valid JSON. No markdown, no explanations.
+    
+    Allowed intensity: 0.0 to 1.0
+    
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
+    
+    user_message = f"""
+    Narrative Context: {narrative_context}
+    Target Locale (for your awareness, but DO NOT write in this language): {locale.target_language}
+    
+    Extract the core concepts needed for this scene and output them as SemanticTokens.
+    
+    You MUST use this EXACT JSON structure:
+    {{
+      "tokens": [
+        {{
+          "concept_id": "greeting_hostile",
+          "intensity": 0.8,
+          "context_vars": {{"player_name": "Sarah"}}
+        }},
+        {{
+          "concept_id": "combat_warn_fire",
+          "intensity": 1.0,
+          "context_vars": {{}}
+        }}
+      ]
+    }}
+    Change the concept_ids to match the narrative context, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3 # Keep it strict and conceptual
+        )
+        
+        raw_json = response.choices[0].message.content
+        parsed_data = json.loads(raw_json)
+        
+        # Extract the list and force it through our Pydantic Bouncer
+        tokens_list = parsed_data.get("tokens", [])
+        validated_tokens = [SemanticToken(**item) for item in tokens_list]
+        
+        print(f"Translation Director extracted {len(validated_tokens)} pure concepts. Zero raw text leaked!")
+        return validated_tokens
+        
+    except Exception as e:
+        print(f"Brain Error (Translation Director Failsafe): {e}")
+        return [] # Returns an empty list so the engine doesn't crash
