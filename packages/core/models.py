@@ -242,6 +242,17 @@ class PerformanceReport(BaseModel):
     bottleneck_component: Optional[str] = Field(default="none")
 
 # ==========================================================
+# DAY 24: PROCEDURAL DSP SYNTHESIS (THE AUDIO HOLE)
+# ==========================================================
+class AudioDNA(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    waveform_type: Literal["sine", "square", "sawtooth", "triangle", "noise"] = Field(default="sine", description="The mathematical shape of the sound wave")
+    base_frequency: float = Field(default=440.0, description="The base pitch in Hertz (Hz)")
+    envelope_attack: float = Field(default=0.05, description="How fast the sound reaches full volume (in seconds)")
+    envelope_decay: float = Field(default=0.5, description="How fast the sound fades out (in seconds)")
+    filter_type: Literal["lowpass", "highpass", "bandpass", "none"] = Field(default="none", description="Frequencies to cut off to shape the tone")
+
+# ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
 # ==========================================================
 class OntologicalNode(BaseModel):
@@ -249,6 +260,7 @@ class OntologicalNode(BaseModel):
     node_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     semantic_tags: List[str] = Field(default_factory=list)
     entity_archetype: Optional[str] = None
+    audio: Optional[AudioDNA] = Field(default=None, description="Procedural DNA for mathematically synthesized sound")
 
 class WorldState(BaseModel):
     model_config = ConfigDict(extra="allow")

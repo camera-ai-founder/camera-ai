@@ -21,12 +21,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-22 Imports
+# Existing Day 1-22 Imports + Day 24 Audio Director
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
     act_as_backend_architect,
-    generate_deployment_topology 
+    generate_deployment_topology,
+    act_as_foley_director # ADDED FOR DAY 24
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
@@ -37,10 +38,11 @@ from packages.core.deployment_engine import DeploymentEngine
 from packages.core.netcode_engine import NetcodeEngine
 from packages.core.security_engine import sanitize_dna
 
-# --- DAY 23 ADDITION: Telemetry & Self-Healing Imports ---
+# --- DAY 23 & DAY 24 ADDITIONS: Telemetry, Self-Healing & Audio Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
-    PerformanceReport, BottleneckType
+    PerformanceReport, BottleneckType,
+    AudioDNA # ADDED FOR DAY 24
 )
 from packages.core.telemetry_engine import telemetry_brain
 
@@ -645,12 +647,57 @@ def telemetry_check():
 """
     console.print(Panel(correction_panel, title="AI SUGGESTIONS APPLIED", border_style="green"))
 
+# ==========================================
+# DAY 24: THE AUDIO HOLE (CLI DSP SYNTHESIS TEST)
+# ==========================================
+@cli.group()
+def audio():
+    """Day 24: Procedural Audio Synthesis Commands."""
+    pass
+
+@audio.command(name="test")
+@click.argument('sound_profile')
+def audio_test(sound_profile):
+    """
+    Tests the Foley Director by generating pure mathematical AudioDNA.
+    Usage: camera audio test neon_hum
+    """
+    console.print(Panel(f"[bold cyan]Initiating Foley Director for profile:[/bold cyan] {sound_profile}", title="Day 24: Procedural DSP Synthesis"))
+    
+    with console.status("[bold green]Foley Director is calculating mathematical sound waves...[/bold green]"):
+        audio_dna = act_as_foley_director(sound_profile)
+        
+    console.print("[bold green]✅ Groq successfully generated flawless AudioDNA![/bold green]\n")
+    
+    # Display the DNA in a beautiful Rich Table
+    table = Table(title=f"🎧 Web Audio API Parameters for: {sound_profile}")
+    table.add_column("Parameter", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+    table.add_column("Description", style="dim")
+    
+    table.add_row("waveform_type", audio_dna.waveform_type, "The mathematical shape of the wave")
+    table.add_row("base_frequency", f"{audio_dna.base_frequency} Hz", "The base pitch of the sound")
+    table.add_row("envelope_attack", f"{audio_dna.envelope_attack} s", "Time to reach full volume")
+    table.add_row("envelope_decay", f"{audio_dna.envelope_decay} s", "Time to fade out to silence")
+    table.add_row("filter_type", audio_dna.filter_type, "Frequencies to cut off")
+    
+    console.print(table)
+    
+    # Show the raw JSON for the browser
+    console.print("\n[bold yellow]Raw JSON DNA ready for the Web Audio API:[/bold yellow]")
+    dna_json = json.dumps(audio_dna.model_dump(), indent=2)
+    syntax = Syntax(dna_json, "json", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="AudioDNA Payload", border_style="green"))
+    
+    console.print("\n[bold cyan]Zero megabytes loaded. Pure math. Your i3 laptop is safe.[/bold cyan]")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
 cli.add_command(backend)
 cli.add_command(netcode)
 cli.add_command(telemetry) # Day 23 Addition
+cli.add_command(audio) # Day 24 Addition
 
 # ==========================================
 # 3. START THE ENGINE

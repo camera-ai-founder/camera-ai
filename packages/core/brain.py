@@ -6,12 +6,13 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20 & 21 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21 & 24 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
     ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
-    PathingIntent, LogicDNA, Route, DeployDNA, StateDelta, SecurityDNA
+    PathingIntent, LogicDNA, Route, DeployDNA, StateDelta, SecurityDNA,
+    AudioDNA # ADDED FOR DAY 24
 )
 
 # ==========================================
@@ -751,3 +752,71 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
     except Exception as e:
         print(f"Brain Error (Multiplayer Director Failsafe): {e}")
         return StateDelta()
+
+# ==========================================
+# 15. DAY 24: THE FOLEY DIRECTOR (Procedural Audio)
+# ==========================================
+def act_as_foley_director(entity_description: str) -> AudioDNA:
+    """
+    DAY 24: THE FOLEY DIRECTOR.
+    Forces the AI to act as a Sound Designer.
+    Instead of picking an audio file, it generates the mathematical AudioDNA
+    for the entity (like a hum for a neon sign, or a hiss for a steam vent).
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return AudioDNA() # Safe silent fallback
+
+    print(f"Foley Director is designing the soundscape for: '{entity_description}'...")
+    
+    system_prompt = f"""
+    You are the Foley Director and Master Sound Designer for a deterministic 3D game engine.
+    You DO NOT use audio files (.mp3, .wav). You ONLY design mathematical sound waves using AudioDNA.
+    You MUST output ONLY valid JSON. No markdown, no explanations.
+
+    Allowed waveform_type: "sine", "square", "sawtooth", "triangle", "noise"
+    Allowed filter_type: "lowpass", "highpass", "bandpass", "none"
+
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
+    
+    user_message = f"""
+    Entity Description: {entity_description}
+    
+    Design the AudioDNA for this entity. Think about what sound it makes in real life.
+    - A neon sign might be a low "sine" wave hum.
+    - A steam vent might be "noise" with a fast attack.
+    - A heavy metal door might be a low "triangle" wave impact.
+    
+    You MUST use this EXACT JSON structure and key names:
+    {{
+      "waveform_type": "sine",
+      "base_frequency": 60.0,
+      "envelope_attack": 0.5,
+      "envelope_decay": 2.0,
+      "filter_type": "lowpass"
+    }}
+    Change the values to perfectly match the acoustic nature of the entity, but KEEP THE EXACT KEY NAMES AND TYPES.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.6 # Creative but structured
+        )
+        
+        raw_json = response.choices[0].message.content
+        
+        # Pydantic forces the raw JSON into our strict AudioDNA model
+        audio_dna = AudioDNA.model_validate_json(raw_json)
+        print("Foley Director generated flawless AudioDNA!")
+        return audio_dna
+        
+    except Exception as e:
+        print(f"Brain Error (Foley Director Failsafe): {e}")
+        return AudioDNA() # Returns a default, safe silent hum
