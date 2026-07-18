@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Literal, Union, Any
 from enum import Enum
 import uuid
 import time
+from datetime import datetime
 
 # ==========================================================
 # 1. PROCEDURAL PRIMITIVES & MATERIALS
@@ -495,3 +496,22 @@ class ModDNA(BaseModel):
     injected_nodes: List[Dict[str, Any]] = Field(default_factory=list) # The pure Ontological Nodes being added
     dependency_tokens: List[str] = Field(default_factory=list) # Ensures the user has the base assets required
     metadata: ModMetadata = Field(default_factory=ModMetadata)
+
+# ==========================================================
+# DAY 28: THE ECONOMY HOLE (MATH BALANCING)
+# ==========================================================
+class EconomyDNA(BaseModel):
+    """The DNA blueprint for a single resource's economic flow."""
+    model_config = ConfigDict(extra="allow")
+    resource_name: str = Field(..., description="Name of the resource, e.g., 'Gold', 'Wood'")
+    faucet_type: Literal["active_quest", "passive_income", "loot_drop"] = Field(..., description="How the resource enters the economy (the source)")
+    sink_type: Literal["vendor_purchase", "crafting_cost", "tax"] = Field(..., description="How the resource leaves the economy (the drain)")
+    target_velocity: float = Field(..., description="Expected transactions per hour to keep the player engaged")
+    inflation_cap: float = Field(..., description="Maximum allowed accumulation rate per hour to mathematically prevent exploits")
+
+class EconomicEvent(BaseModel):
+    """An immutable record of a single economic transaction."""
+    model_config = ConfigDict(extra="allow")
+    actor_id: str = Field(..., description="The ID of the player or entity causing the event")
+    amount: float = Field(..., description="Positive for faucets (earned), negative for sinks (spent)")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="The exact time the event occurred")

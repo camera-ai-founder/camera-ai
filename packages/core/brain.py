@@ -7,7 +7,7 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24, 25, 26 & 27 IMPORTS: The Blueprints
+# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24, 25, 26, 27 & 28 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
@@ -18,7 +18,9 @@ from .models import (
     ModDNA, # ADDED FOR DAY 26
     ModMetadata, # ADDED FOR DAY 26
     SemanticToken, # ADDED FOR DAY 27
-    LocaleDNA # ADDED FOR DAY 27
+    LocaleDNA, # ADDED FOR DAY 27
+    EconomyDNA, # ADDED FOR DAY 28
+    EconomicEvent # ADDED FOR DAY 28
 )
 
 # ==========================================
@@ -1003,3 +1005,90 @@ def act_as_translation_director(narrative_context: str, locale: LocaleDNA) -> Li
     except Exception as e:
         print(f"Brain Error (Translation Director Failsafe): {e}")
         return [] # Returns an empty list so the engine doesn't crash
+
+
+# ==========================================
+# 19. DAY 28: THE ECONOMY DIRECTOR (Math Balancing)
+# ==========================================
+def act_as_economy_director(entity_description: str) -> EconomyDNA:
+    """
+    DAY 28: THE ECONOMY DIRECTOR.
+    Forces the AI to act as an Economic Flow Designer.
+    It is STRICTLY FORBIDDEN from guessing raw prices or loot amounts (e.g., "500 gold").
+    It MUST output the mathematical flow tags (EconomyDNA) so the Engine can 
+    deterministically calculate the exact balanced numbers.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return EconomyDNA(
+            resource_name="Gold",
+            faucet_type="active_quest",
+            sink_type="vendor_purchase",
+            target_velocity=2.0,
+            inflation_cap=100.0
+        )
+
+    print(f"Economy Director is balancing the flow for: '{entity_description}'...")
+    
+    system_prompt = f"""
+    You are the Economy Director for a deterministic 3D game engine.
+    You DO NOT output raw prices, loot amounts, or hardcoded numbers like '500 gold'.
+    You ONLY define the MATHEMATICAL FLOW (the EconomyDNA) of a resource.
+    
+    Faucet Types (How it enters): "active_quest", "passive_income", "loot_drop"
+    Sink Types (How it leaves): "vendor_purchase", "crafting_cost", "tax"
+    
+    target_velocity: Expected transactions per hour (e.g., 2.0 to 10.0)
+    inflation_cap: Maximum allowed accumulation rate per hour to prevent exploits (e.g., 50.0 to 500.0)
+    
+    You MUST output ONLY valid JSON. No markdown, no explanations.
+
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
+    
+    user_message = f"""
+    Entity Description: {entity_description}
+    
+    Design the EconomyDNA for this entity. 
+    Think about how this entity interacts with the economy.
+    - A blacksmith is a "vendor_purchase" sink.
+    - A daily login reward is a "passive_income" faucet.
+    
+    You MUST use this EXACT JSON structure and key names:
+    {{
+      "resource_name": "Gold",
+      "faucet_type": "active_quest",
+      "sink_type": "vendor_purchase",
+      "target_velocity": 5.0,
+      "inflation_cap": 100.0
+    }}
+    Change the values to perfectly balance the flow for the entity, but KEEP THE EXACT KEY NAMES AND TYPES.
+    REMEMBER: Do NOT output raw item prices. Only output the flow rates!
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2 # Keep it strict and mathematical
+        )
+        
+        raw_json = response.choices[0].message.content
+        
+        economy_dna = EconomyDNA.model_validate_json(raw_json)
+        print("Economy Director generated flawless EconomyDNA! Zero raw numbers leaked.")
+        return economy_dna
+        
+    except Exception as e:
+        print(f"Brain Error (Economy Director Failsafe): {e}")
+        return EconomyDNA(
+            resource_name="Gold",
+            faucet_type="active_quest",
+            sink_type="vendor_purchase",
+            target_velocity=2.0,
+            inflation_cap=100.0
+        )
