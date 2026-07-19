@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Day 29: Tutorial Overlay Holodeck</title>
+    <style>
+        body { 
+            background: #0f172a; 
+            color: white; 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        button { 
+            padding: 15px 30px; 
+            font-size: 20px; 
+            cursor: pointer; 
+            background: #38bdf8; 
+            border: none; 
+            border-radius: 8px; 
+            color: #0f172a; 
+            font-weight: bold; 
+            margin: 10px; 
+            transition: transform 0.1s;
+        }
+        button:hover { background: #7dd3fc; transform: scale(1.05); }
+    </style>
+</head>
+<body>
+    <h1>Day 29: The Tutorial Hole (Browser Holodeck)</h1>
+    <p>Click the buttons to simulate the player's struggle and mastery.</p>
+    
+    <button id="btn-struggle">Simulate Struggle (Low Health)</button>
+    <button id="btn-dodge">Simulate Dodge (Mastery!)</button>
+
+    <script type="module">
+        import { TutorialOverlaySystem } from './systems/tutorial_overlays.js';
+
+        const overlay = new TutorialOverlaySystem();
+
+        document.getElementById('btn-struggle').addEventListener('click', () => {
+            console.log("😰 Player is struggling! Projecting mathematical hint...");
+            
+            // 1. Show the hint with low urgency
+            overlay.renderHint({
+                concept_id: "dodge_mechanic",
+                hint_visual_type: "pulsing_input_icon",
+                urgency: 0.3 
+            });
+            
+            // 2. Simulate time passing and urgency growing after 2 seconds
+            setTimeout(() => {
+                console.log("⏳ Time passing... Urgency increasing!");
+                overlay.renderHint({
+                    concept_id: "dodge_mechanic",
+                    hint_visual_type: "pulsing_input_icon",
+                    urgency: 0.9 // High urgency! Pulse gets faster and brighter
+                });
+            }, 2000);
+        });
+
+        document.getElementById('btn-dodge').addEventListener('click', () => {
+            console.log("🎉 Player dodged! Mastery Event logged. Vanishing hint...");
+            
+            // 3. Instantly suppress the hint
+            overlay.suppressHint("dodge_mechanic");
+            
+            // In the real app, this is where we would POST the MasteryEvent to Supabase!
+        });
+    </script>
+</body>
+</html>

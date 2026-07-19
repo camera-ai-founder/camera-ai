@@ -91,7 +91,7 @@ class PriorityDualEngineDNA(BaseModel):
     enable_shadows: bool = Field(default=True)
     shadow_map_resolution: int = 2048
     tier_budgets: dict = Field(default_factory=dict)
-    vfx_complexity: str = Field(default="medium") # ADDED FOR DAY 23 HEALING
+    vfx_complexity: str = Field(default="medium")
 
 class DramaBudget(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -267,10 +267,6 @@ class InputDNA(BaseModel):
 # DAY 27: THE LOCALIZATION HOLE (SEMANTIC & FLUID)
 # ==========================================================
 class FluidUIRules(BaseModel):
-    """
-    Mathematical rules to prevent UI layouts from breaking 
-    when translating to languages with long words (like German).
-    """
     model_config = ConfigDict(extra="allow")
     max_word_length_tolerance: int = Field(default=20, description="Max characters before forced wrapping or scaling")
     force_text_wrap: bool = Field(default=True)
@@ -278,10 +274,6 @@ class FluidUIRules(BaseModel):
     scale_font_down_if_overflow: bool = Field(default=True)
 
 class LocaleDNA(BaseModel):
-    """
-    The master configuration for language and cultural adaptation.
-    This tells the UI Compiler and Audio Engine how to behave for a specific region.
-    """
     model_config = ConfigDict(extra="allow")
     target_language: str = Field(default="en", description="e.g., 'en', 'es', 'ja', 'de'")
     fluid_ui_rules: FluidUIRules = Field(default_factory=FluidUIRules)
@@ -289,14 +281,25 @@ class LocaleDNA(BaseModel):
     text_direction: str = Field(default="ltr", description="'ltr' (Left-to-Right) or 'rtl' (Right-to-Left like Arabic)")
 
 class SemanticToken(BaseModel):
-    """
-    A universal concept ID. This REPLACES hardcoded English strings.
-    The Brain only thinks in these concepts. The Engine translates them later.
-    """
     model_config = ConfigDict(extra="allow")
     concept_id: str = Field(..., description="e.g., 'greeting_hostile', 'combat_warn_fire'")
     intensity: float = Field(default=1.0, description="0.0 to 1.0. Modifies how strongly the concept is expressed.")
     context_vars: Dict[str, Any] = Field(default_factory=dict, description="For injecting variables like {'player_name': 'Sarah'}")
+
+# ==========================================================
+# DAY 29: THE TUTORIAL HOLE (DYNAMIC ONBOARDING)
+# ==========================================================
+class TutorialDNA(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    concept_id: str = Field(..., description="Unique ID for the concept, e.g., 'dodge_mechanic'")
+    trigger_condition: str = Field(..., description="The World State condition that triggers the hint, e.g., 'player_health < 30 AND enemy_distance < 5'")
+    input_requirement: str = Field(..., description="The input the player must perform to succeed, e.g., 'dash_button'")
+    hint_visual_type: Literal["glowing_vector", "pulsing_input_icon", "subtle_particle_trail"] = Field(..., description="The mathematical visual cue to guide the player's eye.")
+
+class MasteryEvent(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    concept_id: str = Field(..., description="The ID of the concept the player just mastered.")
+    success_timestamp: datetime = Field(default_factory=datetime.utcnow, description="The exact time the player succeeded.")
 
 # ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
@@ -353,12 +356,11 @@ class AppDNA(BaseModel):
     required_components: List[AppComponent] = Field(default_factory=list)
     telemetry: TelemetryDNA = Field(default_factory=TelemetryDNA)
     
-    # DAY 27 ADDITION: The Master Locale Switch
     locale: LocaleDNA = Field(default_factory=LocaleDNA)
+    tutorials: List[TutorialDNA] = Field(default_factory=list)
 
 # ==========================================================
 # DAY 12, 15, 16, 17, 18, 20, 21 & 22 RESTORATION
-# (The Final, Unbreakable Missing Links)
 # ==========================================================
 class ImpactVector(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -432,7 +434,7 @@ class BiomeDNA(BaseModel):
     scatter_rules: List[ScatterRule] = Field(default_factory=list)
 
 # --- DAY 17 ADDITIONS ---
-class NavMeshDNA(BaseModel): # ADDED
+class NavMeshDNA(BaseModel):
     model_config = ConfigDict(extra="allow")
     grid_resolution: float = Field(default=1.0)
     agent_radius: float = Field(default=0.5)
@@ -469,39 +471,29 @@ class DeployDNA(BaseModel):
 # ==========================================================
 # CRITICAL ALIASES FOR BACKWARD COMPATIBILITY
 # ==========================================================
-# The Telemetry Engine (Step 3) imports 'GenesisRenderer' directly.
-# We alias it to our master PriorityDualEngineDNA to prevent import errors.
-GenesisRenderer = PriorityDualEngineDNA 
+GenesisRenderer = PriorityDualEngineDNA
 
 # ==========================================================
 # DAY 26: THE MODDING HOLE (SAFE INJECTION)
 # ==========================================================
 class ModMetadata(BaseModel):
-    """
-    Metadata for searching and categorizing the mod in the Community Vault.
-    """
     model_config = ConfigDict(extra="allow")
     version: str = "1.0.0"
     tags: List[str] = Field(default_factory=list)
     description: str = ""
 
 class ModDNA(BaseModel):
-    """
-    The DNA of a community-created mod. 
-    Notice there is NO raw code here, only structured JSON data.
-    """
     model_config = ConfigDict(extra="allow")
     mod_name: str
-    author_id: str # The Supabase UUID of the creator
-    injected_nodes: List[Dict[str, Any]] = Field(default_factory=list) # The pure Ontological Nodes being added
-    dependency_tokens: List[str] = Field(default_factory=list) # Ensures the user has the base assets required
+    author_id: str
+    injected_nodes: List[Dict[str, Any]] = Field(default_factory=list)
+    dependency_tokens: List[str] = Field(default_factory=list)
     metadata: ModMetadata = Field(default_factory=ModMetadata)
 
 # ==========================================================
 # DAY 28: THE ECONOMY HOLE (MATH BALANCING)
 # ==========================================================
 class EconomyDNA(BaseModel):
-    """The DNA blueprint for a single resource's economic flow."""
     model_config = ConfigDict(extra="allow")
     resource_name: str = Field(..., description="Name of the resource, e.g., 'Gold', 'Wood'")
     faucet_type: Literal["active_quest", "passive_income", "loot_drop"] = Field(..., description="How the resource enters the economy (the source)")
@@ -510,7 +502,6 @@ class EconomyDNA(BaseModel):
     inflation_cap: float = Field(..., description="Maximum allowed accumulation rate per hour to mathematically prevent exploits")
 
 class EconomicEvent(BaseModel):
-    """An immutable record of a single economic transaction."""
     model_config = ConfigDict(extra="allow")
     actor_id: str = Field(..., description="The ID of the player or entity causing the event")
     amount: float = Field(..., description="Positive for faucets (earned), negative for sinks (spent)")

@@ -11,7 +11,7 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #0f172a; /* Deep slate background */
+            background-color: #0f172a;
             color: #e2e8f0;
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             display: flex;
@@ -21,7 +21,7 @@
         header {
             padding: 15px 30px;
             background-color: #1e293b;
-            border-bottom: 2px solid #38bdf8; /* Neon cyan accent */
+            border-bottom: 2px solid #38bdf8;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -46,7 +46,7 @@
             flex-direction: column;
         }
         .panel-left {
-            flex: 2; /* Takes up more space */
+            flex: 2;
             border-right: 1px solid #334155;
         }
         .panel-right {
@@ -60,14 +60,12 @@
             margin-bottom: 15px;
             letter-spacing: 1px;
         }
-        /* Cytoscape Container */
         #cy {
             flex: 1;
             background-color: #020617;
             border: 1px solid #334155;
             border-radius: 8px;
         }
-        /* Mod Loader Styles */
         .mod-list {
             list-style: none;
             padding: 0;
@@ -108,13 +106,11 @@
     </header>
 
     <main>
-        <!-- LEFT PANEL: The Ontological Graph -->
         <div class="panel panel-left">
             <div class="panel-title">Ontological Node Graph</div>
             <div id="cy"></div>
         </div>
 
-        <!-- RIGHT PANEL: DAY 26 MOD LOADER -->
         <div class="panel panel-right">
             <div class="panel-title">Community DNA Vault</div>
             <p style="color: #94a3b8; font-size: 13px; margin-top: 0;">
@@ -127,9 +123,6 @@
         </div>
     </main>
 
-    <!-- ==========================================
-         JAVASCRIPT: THE NERVOUS SYSTEM
-         ========================================== -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
     <script>
         // -----------------------------------------
@@ -177,15 +170,21 @@
                 });
                 
                 const result = await response.json();
+                
+                // CRITICAL: Log the exact server response to the browser console (Press F12)
+                console.log("SERVER RESPONSE:", result);
+
                 if (result.success) {
-                    alert(`Success! ${modName} is now part of your reality.`);
+                    alert(`✅ Success! ${modName} is now part of your reality.`);
                     loadGraph(); // Refresh the graph to show the new injected nodes!
                 } else {
-                    alert(`Injection Blocked by Sanitizer: ${result.message}`);
+                    // Fallback message if the server somehow sends an empty message
+                    const errorMsg = result.message || "Unknown error (Check terminal for details)";
+                    alert(`⛔ Injection Blocked: ${errorMsg}`);
                 }
             } catch (error) {
                 console.error("Install failed", error);
-                alert("Network error during injection.");
+                alert("❌ Network error during injection. Check console.");
             } finally {
                 btnElement.disabled = false;
                 btnElement.innerText = 'Inject';

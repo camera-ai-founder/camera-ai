@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA + Day 27 + Day 28
+# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA + Day 27 + Day 28 + Day 29
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
@@ -30,7 +30,8 @@ from packages.core.brain import (
     act_as_foley_director, # ADDED FOR DAY 24
     act_as_control_director, # ADDED FOR DAY 25
     act_as_translation_director, # ADDED FOR DAY 27
-    act_as_economy_director # ADDED FOR DAY 28
+    act_as_economy_director, # ADDED FOR DAY 28
+    act_as_mentor_director # ADDED FOR DAY 29
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
@@ -42,8 +43,9 @@ from packages.core.netcode_engine import NetcodeEngine
 from packages.core.security_engine import sanitize_dna
 from packages.core.localization_engine import LocalizationEngine # ADDED FOR DAY 27
 from packages.core.economy_engine import economy_engine # ADDED FOR DAY 28
+from packages.core.tutorial_engine import TutorialEngine # ADDED FOR DAY 29
 
-# --- DAY 23, 24, 25, 26, 27 & 28 ADDITIONS: Telemetry, Audio, Input, Mod, Locale & Economy Models ---
+# --- DAY 23, 24, 25, 26, 27, 28 & 29 ADDITIONS: Telemetry, Audio, Input, Mod, Locale, Economy & Tutorial Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
     PerformanceReport, BottleneckType,
@@ -51,7 +53,8 @@ from packages.core.models import (
     InputDNA, # ADDED FOR DAY 25
     ModDNA, DramaBudget, # ADDED FOR DAY 26
     LocaleDNA, SemanticToken, FluidUIRules, # ADDED FOR DAY 27
-    EconomyDNA, EconomicEvent # ADDED FOR DAY 28
+    EconomyDNA, EconomicEvent, # ADDED FOR DAY 28
+    TutorialDNA # ADDED FOR DAY 29
 )
 from packages.core.telemetry_engine import telemetry_brain
 from packages.core.modding_engine import engine as modding_engine # ADDED FOR DAY 26
@@ -999,6 +1002,66 @@ def simulate_economy(hours):
     console.print("\n[bold green]✅ The math is flawless, Founder. The Anti-Inflation Guardrails mathematically blocked the exploit![/bold green]")
     console.print("[bold cyan]Your i3 laptop handled this heavy mathematical lifting beautifully. It didn't even break a sweat.[/bold cyan]\n")
 
+# ==========================================
+# DAY 29: THE TUTORIAL HOLE (DYNAMIC ONBOARDING)
+# ==========================================
+@cli.group()
+def tutorial():
+    """Day 29: The Dynamic Onboarding Engine (The Tutorial Hole)."""
+    pass
+
+@tutorial.command()
+@click.argument("scenario")
+def simulate(scenario):
+    """Simulates a struggling player and prints the exact mathematical UI hint."""
+    console.print(f"[bold cyan]Mentor Director is analyzing scenario:[/bold cyan] {scenario}")
+    
+    # 1. Ask the Brain to generate the TutorialDNA for this scenario
+    tutorial_dnas = act_as_mentor_director(scenario)
+    
+    if not tutorial_dnas:
+        console.print("[bold red]Mentor Director could not generate any tutorials.[/bold red]")
+        return
+
+    # 2. Initialize the Silent Observer (Tutorial Engine)
+    engine = TutorialEngine()
+    
+    # 3. Simulate a struggling player state 
+    # We provide fake variables that match the trigger conditions the Brain might invent.
+    fake_world_state = {
+        "player_health": 20.0,
+        "enemy_distance": 4.0,
+        "player_falling_speed": 15.0,
+        "target_distance": 10.0
+    }
+    
+    console.print("[bold yellow]Simulating struggling player state...[/bold yellow]")
+    
+    # 4. Evaluate the tutorials against the fake state
+    active_hints = engine.evaluate_tutorials(tutorial_dnas, fake_world_state)
+    
+    if not active_hints:
+        console.print("[bold green]Player is doing fine! No hints needed.[/bold green]")
+        return
+        
+    # 5. Print the mathematical UI hints using a beautiful Rich Table
+    table = Table(title="Active Mathematical UI Hints (Zero Text Boxes!)")
+    table.add_column("Concept ID", style="cyan")
+    table.add_column("Visual Type", style="magenta")
+    table.add_column("Required Input", style="green")
+    table.add_column("Urgency", style="red")
+    
+    for hint in active_hints:
+        table.add_row(
+            hint["concept_id"],
+            hint["hint_visual_type"],
+            hint["input_requirement"],
+            f"{hint['urgency']:.2f}"
+        )
+        
+    console.print(table)
+    console.print("[bold cyan]The frontend will now project these pure math hints. Zero interruptions![/bold cyan]")
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -1010,6 +1073,7 @@ cli.add_command(input) # Day 25 Addition
 cli.add_command(mod) # Day 26 Addition
 cli.add_command(locale) # Day 27 Addition
 cli.add_command(economy) # Day 28 Addition
+cli.add_command(tutorial) # Day 29 Addition
 
 # ==========================================
 # 3. START THE ENGINE

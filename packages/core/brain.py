@@ -7,7 +7,7 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11, 12, 14, 15, 16, 17, 18, 20, 21, 24, 25, 26, 27 & 28 IMPORTS: The Blueprints
+# 1. DAY 11 to 29 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
@@ -20,7 +20,9 @@ from .models import (
     SemanticToken, # ADDED FOR DAY 27
     LocaleDNA, # ADDED FOR DAY 27
     EconomyDNA, # ADDED FOR DAY 28
-    EconomicEvent # ADDED FOR DAY 28
+    EconomicEvent, # ADDED FOR DAY 28
+    TutorialDNA, # ADDED FOR DAY 29
+    MasteryEvent # ADDED FOR DAY 29
 )
 
 # ==========================================
@@ -929,9 +931,6 @@ def act_as_translation_director(narrative_context: str, locale: LocaleDNA) -> Li
     """
     DAY 27: THE TRANSLATION DIRECTOR.
     Forces the AI to act as a Universal Concept Generator.
-    It is STRICTLY FORBIDDEN from outputting raw human text (English, German, etc.).
-    It MUST output only SemanticTokens (concept_ids) so the Localization Engine 
-    can map them perfectly to any language in the Supabase Dictionary.
     """
     if not client:
         print("Error: Groq client is not initialized.")
@@ -1014,9 +1013,6 @@ def act_as_economy_director(entity_description: str) -> EconomyDNA:
     """
     DAY 28: THE ECONOMY DIRECTOR.
     Forces the AI to act as an Economic Flow Designer.
-    It is STRICTLY FORBIDDEN from guessing raw prices or loot amounts (e.g., "500 gold").
-    It MUST output the mathematical flow tags (EconomyDNA) so the Engine can 
-    deterministically calculate the exact balanced numbers.
     """
     if not client:
         print("Error: Groq client is not initialized.")
@@ -1092,3 +1088,76 @@ def act_as_economy_director(entity_description: str) -> EconomyDNA:
             target_velocity=2.0,
             inflation_cap=100.0
         )
+
+# ==========================================
+# 20. DAY 29: THE MENTOR DIRECTOR (Dynamic Onboarding)
+# ==========================================
+def act_as_mentor_director(mechanic_description: str) -> List[TutorialDNA]:
+    """
+    DAY 29: THE MENTOR DIRECTOR.
+    Commands the AI to automatically write the TutorialDNA alongside any new mechanic.
+    It is STRICTLY FORBIDDEN from writing hardcoded text boxes.
+    It ONLY outputs the mathematical triggers and visual hint types.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return []
+
+    print(f"Mentor Director is designing invisible onboarding for: '{mechanic_description}'...")
+    
+    system_prompt = f"""
+    You are the Mentor Director for a deterministic 3D game engine.
+    Your job is to design the invisible, adaptive onboarding (TutorialDNA) for new game mechanics.
+    You DO NOT write text boxes or linear tutorials. You ONLY define the mathematical triggers and visual hints.
+    You MUST output ONLY valid JSON. No markdown, no explanations.
+
+    Allowed hint_visual_type values: "glowing_vector", "pulsing_input_icon", "subtle_particle_trail"
+    
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
+    
+    user_message = f"""
+    Mechanic Description: {mechanic_description}
+    
+    Design the TutorialDNA for this mechanic. Think about when a player might struggle and what button they need to press.
+    - If it's a grappling hook, trigger condition might be "player_falling_speed > 10 AND target_distance < 20", input is "grapple_button".
+    
+    You MUST output an exact JSON object with a key called "tutorials" containing a list of TutorialDNA objects.
+    
+    You MUST use this EXACT JSON structure:
+    {{
+      "tutorials": [
+        {{
+          "concept_id": "grapple_mechanic",
+          "trigger_condition": "player_falling_speed > 10 AND target_distance < 20",
+          "input_requirement": "grapple_button",
+          "hint_visual_type": "glowing_vector"
+        }}
+      ]
+    }}
+    Change the values to perfectly fit the mechanic, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.5 
+        )
+        
+        raw_json = response.choices[0].message.content
+        parsed_data = json.loads(raw_json)
+        
+        tutorials_list = parsed_data.get("tutorials", [])
+        validated_tutorials = [TutorialDNA(**item) for item in tutorials_list]
+        
+        print(f"Mentor Director designed {len(validated_tutorials)} invisible onboarding rules flawlessly!")
+        return validated_tutorials
+        
+    except Exception as e:
+        print(f"Brain Error (Mentor Director Failsafe): {e}")
+        return []

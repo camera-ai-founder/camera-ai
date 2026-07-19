@@ -1,4 +1,8 @@
 import os
+import sys
+# CRITICAL FIX: Tell Python to look in the root folder for our packages
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 import json
 import threading
 import logging
@@ -41,11 +45,24 @@ except ImportError:
     AppDNA = None
     telemetry_brain = None
 
+# ==========================================
+# DAY 26 IMPORTS: The Mod Loader API
+# ==========================================
+try:
+    from packages.core.models import ModDNA, DramaBudget, WorldState
+    from packages.core.modding_engine import engine as modding_engine
+except ImportError as e:
+    ModDNA = None
+    DramaBudget = None
+    WorldState = None
+    modding_engine = None
+    print(f"WARNING: Modding system import failed: {e}")
+
 # --- 0. LOAD THE .ENV FILE ---
 load_dotenv()
 
 # --- SET UP LOGGING ---
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("FlaskApp")
 
 # --- 1. SETUP SUPABASE ---
@@ -82,10 +99,6 @@ def save_current_state(state: dict):
 # DAY 23: BACKGROUND WORKER (THE BLACK BOX WRITER)
 # ==========================================
 def save_to_blackbox(report_data: dict):
-    """
-    Runs in a separate thread. Writes telemetry to Supabase
-    without freezing the main Flask request thread.
-    """
     if not supabase:
         return
     try:
@@ -106,7 +119,6 @@ def index():
 # ==========================================
 @app.route('/api/graph')
 def get_graph_data():
-    """Fetches Camera AI ontology nodes and formats them for the web visualizer."""
     if not supabase:
         return jsonify({"nodes": [], "edges": [], "debug": {"error": "Supabase offline"}}), 500
 
@@ -128,7 +140,7 @@ def get_graph_data():
             }
         })
         
-        if parent_id is not None and parent_id != 'null' and parent_id != '':
+        if parent_id is not None and str(parent_id).lower() not in ['null', '']:
             edges_created += 1
             cy_edges.append({
                 "data": {
@@ -152,12 +164,10 @@ def get_graph_data():
 # ==========================================
 @app.route('/api/impact', methods=['POST'])
 def trigger_impact():
-    """Receives the ImpactVector JSON, calculates the narrative, and sends it back."""
     if not ImpactVector or not JuiceProfile or not brain:
         return jsonify({"error": "Day 12 Juice Engine not available"}), 500
 
     data = request.get_json()
-    
     if not data:
         return jsonify({"error": "No JSON data provided"}), 400
 
@@ -182,42 +192,29 @@ def trigger_impact():
 # ==========================================
 @app.route('/api/live-canvas', methods=['POST'])
 def update_live_canvas():
-    """Receives state from the CLI and broadcasts it via Supabase Realtime."""
     if not supabase:
         return jsonify({"status": "error", "message": "Supabase offline"}), 500
 
     try:
         new_state = request.get_json()
-        
         response = supabase.table("live_canvas_state").upsert({
             "id": 1, 
             "data": new_state
         }).execute()
-        
         return jsonify({"status": "success", "message": "Live Canvas broadcasted!"}), 200
-        
     except Exception as e:
-        return jsonify({
-            "status": "error", 
-            "message": f"Could not broadcast. Please ensure the 'live_canvas_state' table exists in Supabase. Error: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "message": f"Could not broadcast. Error: {str(e)}"}), 500
 
 # ==========================================
 # 7. DAY 21: DETERMINISTIC NETCODE BROADCAST
 # ==========================================
 @app.route('/api/update_state', methods=['POST'])
 def update_state():
-    """
-    THE REALTIME DELTA BROADCAST HOOK.
-    Calculates the surgical Delta using pure math,
-    then broadcasts ONLY the Delta via Supabase Realtime.
-    """
     if not supabase or not NetcodeEngine:
         return jsonify({"status": "error", "message": "Supabase or Netcode Engine offline"}), 500
 
     try:
         new_state_data = request.get_json()
-        
         if not new_state_data:
             return jsonify({"status": "error", "message": "No JSON data provided"}), 400
         
@@ -235,56 +232,41 @@ def update_state():
         return jsonify({
             "status": "success", 
             "message": "Delta calculated and broadcasted via Supabase Realtime!",
-            "changed_nodes_count": len(delta_payload["changed_nodes"]),
-            "changed_tokens_count": len(delta_payload["changed_tokens"]),
-            "removed_nodes_count": len(delta_payload["removed_node_ids"])
+            "changed_nodes_count": len(delta_payload.get("changed_nodes", [])),
+            "changed_tokens_count": len(delta_payload.get("changed_tokens", {})),
+            "removed_nodes_count": len(delta_payload.get("removed_node_ids", []))
         }), 200
 
     except Exception as e:
-        return jsonify({
-            "status": "error", 
-            "message": f"Could not broadcast delta. Error: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "message": f"Could not broadcast delta. Error: {str(e)}"}), 500
 
 # ==========================================
 # 8. DAY 23: TELEMETRY BLACK BOX ENDPOINTS
 # ==========================================
 @app.route('/api/telemetry/report', methods=['POST'])
 def receive_telemetry_report():
-    """
-    The endpoint the frontend Profiler calls when FPS drops.
-    Validates the report, saves to Black Box in background, 
-    and immediately responds without blocking.
-    """
     if not PerformanceReport:
         return jsonify({"status": "error", "message": "Telemetry models not available"}), 500
 
     try:
         raw_json = request.json
         report = PerformanceReport.model_validate(raw_json)
-        
-        logger.info(f"🚨 Telemetry Received: FPS {report.current_fps} | Bottleneck: {report.bottleneck_component}")
+        logger.info(f" Telemetry Received: FPS {report.current_fps} | Bottleneck: {report.bottleneck_component}")
 
-        # Fire and forget: Send to the Black Box in a background thread
         if supabase:
             thread = threading.Thread(target=save_to_blackbox, args=(report.model_dump(mode='json'),))
             thread.daemon = True
             thread.start()
 
         return jsonify({"status": "received", "message": "Logged to Black Box"}), 200
-
     except Exception as e:
         logger.error(f"Invalid Telemetry Report received: {e}")
         return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/telemetry/history', methods=['GET'])
 def get_telemetry_history():
-    """
-    Endpoint for the CLI (Step 6) to pull the last 5 performance reports.
-    """
     if not supabase:
         return jsonify({"error": "Black Box offline"}), 500
-        
     try:
         response = supabase.table("telemetry_logs").select("*").order("created_at", desc=True).limit(5).execute()
         return jsonify(response.data), 200
@@ -293,58 +275,32 @@ def get_telemetry_history():
 
 @app.route('/api/telemetry/heal', methods=['POST'])
 def trigger_ai_healing():
-    """
-    The full self-healing endpoint. Receives a performance report,
-    asks the AI Brain to downgrade the DNA, and returns the healed DNA.
-    """
     if not PerformanceReport or not telemetry_brain or not AppDNA:
         return jsonify({"status": "error", "message": "AI Healing system not available"}), 500
 
     try:
         raw_json = request.json
         report = PerformanceReport.model_validate(raw_json)
-        
-        # Load the current master DNA
-        current_dna = AppDNA()  # In production, load from DB or OGF_STATE.json
-        
-        # Ask the AI Brain to heal
+        current_dna = AppDNA()
         healed_dna = telemetry_brain.heal_dna(report, current_dna)
         
         return jsonify({
             "status": "healed",
             "healed_dna": healed_dna.model_dump(mode='json')
         }), 200
-
     except Exception as e:
         logger.error(f"AI Healing failed: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ==========================================
-# RUN THE SERVER
+# DAY 26: THE MOD LOADER API (BULLETPROOF VERSION)
 # ==========================================
-if __name__ == '__main__':
-    # ==========================================
-# DAY 26: THE MOD LOADER API
-# ==========================================
-try:
-    from packages.core.models import ModDNA, DramaBudget, WorldState
-    from packages.core.modding_engine import engine as modding_engine
-except ImportError:
-    ModDNA = None
-    DramaBudget = None
-    WorldState = None
-    modding_engine = None
-
 @app.route('/api/mods', methods=['GET'])
 def get_approved_mods():
-    """Fetches only safe, approved mods for the UI to display."""
     if not supabase:
         return jsonify({"error": "Supabase offline"}), 500
     try:
-        response = supabase.table('community_vault') \
-            .select('id, mod_name, metadata') \
-            .eq('status', 'approved') \
-            .execute()
+        response = supabase.table('community_vault').select('id, mod_name, metadata').eq('status', 'approved').execute()
         return jsonify(response.data), 200
     except Exception as e:
         logger.error(f"Error fetching mods: {e}")
@@ -353,41 +309,58 @@ def get_approved_mods():
 @app.route('/api/mods/install', methods=['POST'])
 def install_mod():
     """Takes a Mod ID, fetches the safe JSON, and injects it into OGF_STATE."""
-    if not supabase or not ModDNA or not modding_engine:
-        return jsonify({"error": "Modding system not available"}), 500
+    if not supabase:
+        logger.error("Supabase not available")
+        return jsonify({"success": False, "message": "Supabase not available"}), 500
+    
+    if not ModDNA or not modding_engine:
+        logger.error("Modding system not available. Check imports.")
+        logger.error(f"ModDNA: {ModDNA}, modding_engine: {modding_engine}")
+        return jsonify({"success": False, "message": "Modding system not available on server."}), 500
         
     try:
         data = request.json
         mod_id = data.get('mod_id')
+        logger.info(f"📥 Attempting to install mod ID: {mod_id}")
 
         # 1. Fetch the pure JSON from our secure vault
         response = supabase.table('community_vault') \
-            .select('mod_dna, mod_name') \
+            .select('mod_dna, mod_name, status') \
             .eq('id', mod_id) \
             .single() \
             .execute()
             
-        mod_dna_dict = response.data['mod_dna']
-        mod_name = response.data['mod_name']
+        if not response.data:
+            logger.error(f"❌ Mod ID {mod_id} not found in database.")
+            return jsonify({"success": False, "message": "Mod not found in Vault."}), 404
+            
+        mod_dna_dict = response.data.get('mod_dna')
+        mod_name = response.data.get('mod_name', 'Unknown Mod')
+
+        # CRITICAL CHECK: Is the mod_dna column actually empty in Supabase?
+        if not mod_dna_dict:
+            logger.error(f"❌ Mod '{mod_name}' has NO 'mod_dna' data in the database!")
+            return jsonify({"success": False, "message": f"Mod '{mod_name}' has empty or missing DNA data in Supabase. Please update the row."}), 400
 
         # 2. Force it through the Pydantic Bouncer
+        logger.info(f"🛡️ Validating DNA for: {mod_name}")
         safe_mod = ModDNA(**mod_dna_dict)
 
         # 3. Get current World State and Drama Budget
         current_state_dict = load_current_state()
-        # Extract the world_state dictionary safely
         ws_dict = current_state_dict.get("world_state", current_state_dict)
         current_world = WorldState(**ws_dict)
         current_budget = DramaBudget() 
 
         # 4. Trigger the Safe Injection Engine!
+        logger.info(f"⚙️ Injecting mod: {mod_name}")
         new_world = modding_engine.inject_mod(current_world, safe_mod, current_budget)
         
-        # 5. Save back to OGF_STATE.json using your existing helper
+        # 5. Save back to OGF_STATE.json
         current_state_dict["world_state"] = new_world.model_dump(mode='json')
         save_current_state(current_state_dict)
         
-        logger.info(f"Successfully injected mod: {safe_mod.mod_name}")
+        logger.info(f"✅ Successfully injected mod: {safe_mod.mod_name}")
         
         return jsonify({
             "success": True, 
@@ -395,9 +368,18 @@ def install_mod():
         }), 200
 
     except ValueError as ve:
-        # This catches our Sanitizer rejections!
-        return jsonify({"success": False, "message": str(ve)}), 400
+        # This catches our Sanitizer/Pydantic rejections!
+        error_msg = str(ve)
+        logger.error(f"⛔ SANITIZER BLOCKED MOD: {error_msg}")
+        return jsonify({"success": False, "message": f"Sanitizer blocked it: {error_msg}"}), 400
     except Exception as e:
-        logger.error(f"Error installing mod: {e}")
-        return jsonify({"success": False, "message": f"Injection failed: {str(e)}"}), 500
+        # This catches anything else (like missing columns or network issues)
+        error_msg = str(e)
+        logger.error(f"❌ CRITICAL INJECTION ERROR: {error_msg}")
+        return jsonify({"success": False, "message": f"Critical error: {error_msg}"}), 500
+
+# ==========================================
+# RUN THE SERVER
+# ==========================================
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
