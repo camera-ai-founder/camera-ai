@@ -506,3 +506,30 @@ class EconomicEvent(BaseModel):
     actor_id: str = Field(..., description="The ID of the player or entity causing the event")
     amount: float = Field(..., description="Positive for faucets (earned), negative for sinks (spent)")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="The exact time the event occurred")
+
+# ==========================================================
+# DAY 30: THE CHRONO DNA — DETERMINISTIC SEED CHECKPOINTING
+# ==========================================================
+# This is the Save State Hole. We NEVER save heavy 3D coordinates
+# or binary blobs. We only save the Mathematical Seed, the Timestamp,
+# and a hash of the Abstracted Input Log.
+# Infinite rewind history = kilobytes, not gigabytes. Zero RAM bloat.
+# ==========================================================
+
+class ChronoDNA(BaseModel):
+    """
+    The Time Capsule.
+    """
+    model_config = ConfigDict(extra="allow")
+    world_seed: int = Field(..., description="The master mathematical seed that generated the entire world.")
+    timestamp: float = Field(..., description="The exact moment in game-time (in seconds) when this checkpoint was created.")
+    input_log_hash: str = Field(..., description="A tiny fingerprint (hash) of every abstracted player action.")
+    rewind_depth: int = Field(default=0, description="How many checkpoints back from 'now' this one sits.")
+
+class RewindIntent(BaseModel):
+    """
+    The Time Travel Request.
+    """
+    model_config = ConfigDict(extra="allow")
+    target_timestamp: float = Field(..., description="The exact game-time (in seconds) the player wants to rewind to.")
+    reason: str = Field(default="manual", description="Why the rewind was triggered (e.g., 'manual', 'player_death').")

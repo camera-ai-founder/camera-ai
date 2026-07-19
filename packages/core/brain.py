@@ -7,7 +7,7 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11 to 29 IMPORTS: The Blueprints
+# 1. DAY 11 to 30 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
@@ -22,7 +22,9 @@ from .models import (
     EconomyDNA, # ADDED FOR DAY 28
     EconomicEvent, # ADDED FOR DAY 28
     TutorialDNA, # ADDED FOR DAY 29
-    MasteryEvent # ADDED FOR DAY 29
+    MasteryEvent, # ADDED FOR DAY 29
+    ChronoDNA, # ADDED FOR DAY 30
+    RewindIntent # ADDED FOR DAY 30
 )
 
 # ==========================================
@@ -1161,3 +1163,73 @@ def act_as_mentor_director(mechanic_description: str) -> List[TutorialDNA]:
     except Exception as e:
         print(f"Brain Error (Mentor Director Failsafe): {e}")
         return []
+
+# ==========================================
+# 21. DAY 30: THE TIME DIRECTOR (BRAIN UPGRADE)
+# ==========================================
+def act_as_time_director(world_state: WorldState) -> dict:
+    """
+    DAY 30: THE TIME DIRECTOR.
+    Analyzes the WorldState (specifically the 'heat_level' or tension) 
+    and dynamically adjusts how often we create ChronoDNA checkpoints 
+    and how far back the player is allowed to rewind.
+    """
+    if not client:
+        print("Error: Groq client is not initialized.")
+        return {
+            "checkpoint_interval_seconds": 30.0,
+            "max_rewind_depth_seconds": 60.0,
+            "reasoning": "Safe Fallback (No Groq)"
+        }
+
+    heat = getattr(world_state, 'heat_level', 0)
+    print(f"Time Director is analyzing tension (Heat Level: {heat})...")
+
+    system_prompt = f"""
+    You are the Time Director for a deterministic game engine.
+    Your job is to analyze the game's current tension (Heat Level) and determine the optimal time-travel settings.
+    You MUST output ONLY valid JSON. No markdown, no explanations.
+    
+    {SECURITY_GUARDRAILS_PROMPT}
+    """
+    
+    user_message = f"""
+    Current World Heat Level (Tension): {heat} (0 is calm, 5 is chaotic boss fight).
+    
+    Based on the tension, output ONLY a valid JSON object with these keys:
+    - "checkpoint_interval_seconds": float (How often to save. Calm=300.0, Boss=2.0).
+    - "max_rewind_depth_seconds": float (How far back player can go. Calm=60.0, Boss=300.0).
+    - "reasoning": string (Short explanation).
+    
+    You MUST use this EXACT JSON structure and key names:
+    {{
+      "checkpoint_interval_seconds": 30.0,
+      "max_rewind_depth_seconds": 60.0,
+      "reasoning": "The world is calm, standard saving is sufficient."
+    }}
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1 # Low temperature for strict, logical math.
+        )
+        
+        raw_json = response.choices[0].message.content
+        decision = json.loads(raw_json)
+        
+        print(f"[TIME DIRECTOR] 🧠 Tension: {heat} | Decision: {decision.get('reasoning', 'Unknown')}")
+        return decision
+
+    except Exception as e:
+        print(f"[TIME DIRECTOR] ⚠️ AI error, using safe defaults: {e}")
+        return {
+            "checkpoint_interval_seconds": 30.0,
+            "max_rewind_depth_seconds": 60.0,
+            "reasoning": "Safe Fallback"
+        }

@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from supabase import create_client
 
-# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA + Day 27 + Day 28 + Day 29
+# Existing Day 1-22 Imports + Day 24 Audio Director + Day 25 InputDNA + Day 26 ModDNA + Day 27 + Day 28 + Day 29 + Day 30
 from packages.core.brain import (
     get_world_state, update_world_state, generate, 
     summarize_state, get_ui_blueprint, act_as_ecosystem_director,
@@ -31,7 +31,8 @@ from packages.core.brain import (
     act_as_control_director, # ADDED FOR DAY 25
     act_as_translation_director, # ADDED FOR DAY 27
     act_as_economy_director, # ADDED FOR DAY 28
-    act_as_mentor_director # ADDED FOR DAY 29
+    act_as_mentor_director, # ADDED FOR DAY 29
+    act_as_time_director # ADDED FOR DAY 30
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
@@ -44,8 +45,9 @@ from packages.core.security_engine import sanitize_dna
 from packages.core.localization_engine import LocalizationEngine # ADDED FOR DAY 27
 from packages.core.economy_engine import economy_engine # ADDED FOR DAY 28
 from packages.core.tutorial_engine import TutorialEngine # ADDED FOR DAY 29
+from packages.core.chrono_engine import ChronoEngine # ADDED FOR DAY 30
 
-# --- DAY 23, 24, 25, 26, 27, 28 & 29 ADDITIONS: Telemetry, Audio, Input, Mod, Locale, Economy & Tutorial Models ---
+# --- DAY 23 to 30 ADDITIONS: Telemetry, Audio, Input, Mod, Locale, Economy, Tutorial & Chrono Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
     PerformanceReport, BottleneckType,
@@ -54,7 +56,8 @@ from packages.core.models import (
     ModDNA, DramaBudget, # ADDED FOR DAY 26
     LocaleDNA, SemanticToken, FluidUIRules, # ADDED FOR DAY 27
     EconomyDNA, EconomicEvent, # ADDED FOR DAY 28
-    TutorialDNA # ADDED FOR DAY 29
+    TutorialDNA, # ADDED FOR DAY 29
+    ChronoDNA, RewindIntent # ADDED FOR DAY 30
 )
 from packages.core.telemetry_engine import telemetry_brain
 from packages.core.modding_engine import engine as modding_engine # ADDED FOR DAY 26
@@ -1062,6 +1065,85 @@ def simulate(scenario):
     console.print(table)
     console.print("[bold cyan]The frontend will now project these pure math hints. Zero interruptions![/bold cyan]")
 
+# ==========================================
+# DAY 30: THE SAVE STATE HOLE (DETERMINISTIC REWIND)
+# ==========================================
+@cli.group()
+def chrono():
+    """Day 30: Deterministic Seed Checkpointing & Time Rewind."""
+    pass
+
+@chrono.command(name="test")
+def chrono_test():
+    """Simulates inputs, saves a checkpoint, rewinds, and verifies math."""
+    console.print(Panel("[bold cyan]DAY 30: THE DETERMINISTIC REWIND TEST[/bold cyan]", expand=False))
+    
+    # 1. Initialize the Engine
+    engine = ChronoEngine()
+    master_seed = 42
+    current_time = 0.0
+    
+    console.print(f"🌍 [green]Initializing World with Seed: {master_seed}[/green]")
+    
+    # 2. Simulate a sequence of abstracted inputs (The Black Box)
+    input_log = [
+        {"action": "move_forward", "timestamp": 1.0},
+        {"action": "jump", "timestamp": 2.5},
+        {"action": "dash", "timestamp": 4.0},
+        {"action": "attack", "timestamp": 5.5}
+    ]
+    
+    console.print(f"⏺️ [yellow]Recording {len(input_log)} abstracted intents to the Black Box...[/yellow]")
+    current_time = 10.0 
+    
+    # 3. Get the original state at 10 seconds
+    original_state = engine.generate_world_layout(master_seed, current_time)
+    console.print(f"📍 [cyan]Original State at {current_time}s:[/cyan] {original_state['entities'][0]}")
+    
+    # 4. Create a Checkpoint (ChronoDNA) at 4 seconds
+    checkpoint_time = 4.0
+    checkpoint_dna = engine.create_checkpoint(master_seed, checkpoint_time, depth=1)
+    console.print(f"💾 [bold green]Checkpoint Saved![/bold green] Time: {checkpoint_dna.timestamp}s | Hash: {checkpoint_dna.input_log_hash}")
+    
+    # 5. Trigger a Rewind Intent back to 4.0 seconds
+    console.print("🔄 [bold magenta]Triggering Rewind Intent...[/bold magenta]")
+    rewind_intent = RewindIntent(target_timestamp=checkpoint_time, reason="manual_test")
+    
+    # 6. Process the Rewind (The Time Travel)
+    rewound_state = engine.process_rewind(
+        rewind_intent=rewind_intent,
+        full_input_log=input_log,
+        restored_seed=checkpoint_dna.world_seed
+    )
+    
+    # 7. Verify the Math
+    console.print(f"📍 [cyan]Rewound State at {checkpoint_time}s:[/cyan] {rewound_state['entities'][0]}")
+    
+    verification_state = engine.generate_world_layout(master_seed, checkpoint_time)
+    
+    if rewound_state['entities'] == verification_state['entities']:
+        console.print("[bold green]✅ SUCCESS! The mathematical output perfectly matches. Zero RAM bloat. Time travel verified.[/bold green]")
+    else:
+        console.print("[bold red]❌ FAILURE! The math did not align. The Old Paradigm has infected the engine.[/bold red]")
+
+    # 8. Test the Time Director (Brain Upgrade)
+    console.print("\n🧠 [bold yellow]Testing the Time Director (Brain Upgrade)...[/bold yellow]")
+    calm_world = WorldState(heat_level=0)
+    boss_world = WorldState(heat_level=5)
+    
+    calm_decision = act_as_time_director(calm_world)
+    boss_decision = act_as_time_director(boss_world)
+    
+    table = Table(title="Time Director Dynamic Checkpoints")
+    table.add_column("Tension Level", justify="center")
+    table.add_column("Save Interval (s)", justify="center")
+    table.add_column("Max Rewind (s)", justify="center")
+    
+    table.add_row("Calm (0)", str(calm_decision.get('checkpoint_interval_seconds')), str(calm_decision.get('max_rewind_depth_seconds')))
+    table.add_row("Boss Fight (5)", str(boss_decision.get('checkpoint_interval_seconds')), str(boss_decision.get('max_rewind_depth_seconds')))
+    
+    console.print(table)
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -1074,6 +1156,7 @@ cli.add_command(mod) # Day 26 Addition
 cli.add_command(locale) # Day 27 Addition
 cli.add_command(economy) # Day 28 Addition
 cli.add_command(tutorial) # Day 29 Addition
+cli.add_command(chrono) # Day 30 Addition
 
 # ==========================================
 # 3. START THE ENGINE
