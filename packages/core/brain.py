@@ -1,34 +1,50 @@
 # packages/core/brain.py
+
 import os
 import json
+import uuid
 from typing import List, Optional, Dict, Any, Union
 from dotenv import load_dotenv
 from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11 to 31 IMPORTS: The Blueprints
+# DAY 11 to DAY 32 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
-    WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
-    ParametricGenome, VisualQuery, CameraAction, VFXProfile, BiomeDNA,
-    PathingIntent, LogicDNA, Route, DeployDNA, StateDelta, SecurityDNA,
-    AudioDNA, # ADDED FOR DAY 24
-    InputDNA, # ADDED FOR DAY 25
-    ModDNA, # ADDED FOR DAY 26
-    ModMetadata, # ADDED FOR DAY 26
-    SemanticToken, # ADDED FOR DAY 27
-    LocaleDNA, # ADDED FOR DAY 27
-    EconomyDNA, # ADDED FOR DAY 28
-    EconomicEvent, # ADDED FOR DAY 28
-    TutorialDNA, # ADDED FOR DAY 29
-    MasteryEvent, # ADDED FOR DAY 29
-    ChronoDNA, # ADDED FOR DAY 30
-    RewindIntent, # ADDED FOR DAY 30
-    AccessibilityDNA, # ADDED FOR DAY 31
-    AdaptationEvent, # ADDED FOR DAY 31
-    TelemetryDNA, # ADDED FOR DAY 31 EMPATHY DIRECTOR
-    PerformanceReport # ADDED FOR DAY 31 EMPATHY DIRECTOR
+    WorldState,
+    JuiceProfile,
+    AppDNA,
+    AppComponent,
+    DesignTokens,
+    ParametricGenome,
+    VisualQuery,
+    CameraAction,
+    VFXProfile,
+    BiomeDNA,
+    PathingIntent,
+    LogicDNA,
+    Route,
+    DeployDNA,
+    StateDelta,
+    SecurityDNA,
+    AudioDNA,
+    InputDNA,
+    ModDNA,
+    ModMetadata,
+    SemanticToken,
+    LocaleDNA,
+    EconomyDNA,
+    EconomicEvent,
+    TutorialDNA,
+    MasteryEvent,
+    ChronoDNA,
+    RewindIntent,
+    AccessibilityDNA,
+    AdaptationEvent,
+    TelemetryDNA,
+    PerformanceReport,
+    QuestDNA
 )
 
 # ==========================================
@@ -42,6 +58,18 @@ except ImportError:
         from packages.core.accessibility_engine import default_accessibility_engine
     except ImportError:
         default_accessibility_engine = None
+
+# ==========================================
+# DAY 32 IMPORT:
+# The Narrative Engine validates QuestDNA as a DAG.
+# ==========================================
+try:
+    from .narrative_engine import NarrativeEngine
+except ImportError:
+    try:
+        from packages.core.narrative_engine import NarrativeEngine
+    except ImportError:
+        NarrativeEngine = None
 
 # ==========================================
 # DAY 22 STEP 5: THE SECURITY GUARDRAILS
@@ -58,7 +86,7 @@ If you violate these rules, the Sanitizer will block your output. Generate clean
 """
 
 # ==========================================
-# 2. LOAD SECRETS FIRST 
+# LOAD SECRETS FIRST 
 # ==========================================
 load_dotenv()
 
@@ -83,46 +111,80 @@ else:
 
 
 # ==========================================
-# 3. DAY 7: FETCHING THE MEMORY 
+# SHARED PROJECT MEMORY HELPERS
+# ==========================================
+def get_latest_project_id() -> Optional[str]:
+    """
+    Safely fetch the most recent project ID from Supabase.
+    """
+    if not supabase:
+        return None
+
+    try:
+        response = (
+            supabase.table("projects")
+            .select("id")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if response.data and len(response.data) > 0:
+            return response.data[0].get("id")
+
+    except Exception as e:
+        print(f"Error fetching latest project ID: {e}")
+
+    return None
+
+
+# ==========================================
+# DAY 7: FETCHING THE MEMORY 
 # ==========================================
 def get_current_context():
     if not supabase:
         return "Supabase is not connected. Starting from scratch."
 
     try:
-        response = supabase.table("projects").select("id, name, scene_data").order("created_at", desc=True).limit(1).execute()
-        
+        response = (
+            supabase.table("projects")
+            .select("id, name, scene_data")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
         if response.data and len(response.data) > 0:
             latest_project = response.data[0]
             project_name = latest_project.get("name", "Unnamed Project")
             scene_data = latest_project.get("scene_data", {})
-            
+
             context_string = f"The user's current project is named '{project_name}'."
-            
+
             if scene_data and isinstance(scene_data, dict):
                 scene_info = scene_data.get("scene", {})
                 scene_name = scene_info.get("name", "a generated scene")
                 objects = scene_info.get("objects", [])
-                
+
                 context_string += f" It currently contains a scene named '{scene_name}' with {len(objects)} objects."
-                
+
                 if len(objects) > 0:
-                    obj_names = [obj.get('name', 'Unknown') for obj in objects[:5]]
+                    obj_names = [obj.get("name", "Unknown") for obj in objects[:5]]
                     context_string += f" Some of the existing objects are: {', '.join(obj_names)}."
             else:
                 context_string += " It has no detailed scene data yet."
-                
+
             return context_string
-        else:
-            return "There is no existing project data in the vault yet. You are starting from scratch."
-            
+
+        return "There is no existing project data in the vault yet. You are starting from scratch."
+
     except Exception as e:
         print(f"Error fetching memory from Supabase: {e}")
         return "Could not load project memory. Proceeding as if starting from scratch."
 
 
 # ==========================================
-# 4. DAY 8 & DAY 13: THE FRACTAL ENGINE GENERATION 
+# DAY 8 & DAY 13: THE FRACTAL ENGINE GENERATION 
 # ==========================================
 def generate(user_prompt: str):
     if not client:
@@ -132,20 +194,18 @@ def generate(user_prompt: str):
     print(f"Camera AI is thinking about: '{user_prompt}'...")
     project_memory = get_current_context()
 
-    # --- DAY 11 & 13: FETCHING STATE & WORLD TRUTHS ---
-    project_id = None
-    if supabase:
-        id_response = supabase.table("projects").select("id").order("created_at", desc=True).limit(1).execute()
-        if id_response.data and len(id_response.data) > 0:
-            project_id = id_response.data[0]["id"]
-
+    project_id = get_latest_project_id()
     current_state = get_world_state(project_id)
-    state_context = f"CURRENT GAME STATE: The player's Heat/Wanted Level is {current_state.heat_level}/5. The current time of day is {current_state.time_of_day}."
-    
-    # DAY 13 STEP 3: INJECTING CONTEXT PRUNING (WORLD TRUTHS)
-    raw_history_json = json.dumps(current_state.model_dump())
+
+    state_context = (
+        f"CURRENT GAME STATE: The player's Heat/Wanted Level is "
+        f"{current_state.heat_level}/5. The current time of day is "
+        f"{current_state.time_of_day}."
+    )
+
+    raw_history_json = json.dumps(current_state.model_dump(), default=str)
     world_truths = summarize_state(raw_history_json)
-    
+
     truths_string = "\n".join([f"- {truth}" for truth in world_truths])
 
     system_prompt = f"""You are Camera AI, the Ontological Genesis Fabric. 
@@ -175,7 +235,7 @@ def generate(user_prompt: str):
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -184,8 +244,8 @@ def generate(user_prompt: str):
         )
 
         raw_json = response.choices[0].message.content
-        json.loads(raw_json) 
-        
+        json.loads(raw_json)
+
         print("Camera AI generated new Fractal JSON!")
         return raw_json
 
@@ -195,47 +255,158 @@ def generate(user_prompt: str):
 
 
 # ==========================================
-# 5. DAY 11: THE WORLD STATE MANAGER (Step 3 & Step 5)
+# DAY 11: THE WORLD STATE MANAGER
 # ==========================================
-def get_world_state(project_id: str) -> WorldState:
+def get_world_state(project_id: Optional[str] = None) -> WorldState:
+    if project_id is None:
+        project_id = get_latest_project_id()
+
     if not supabase or not project_id:
         return WorldState()
 
     try:
-        response = supabase.table('projects').select('world_state').eq('id', project_id).execute()
-        
+        response = (
+            supabase.table("projects")
+            .select("world_state")
+            .eq("id", project_id)
+            .execute()
+        )
+
         if response.data and len(response.data) > 0:
-            json_data = response.data[0].get('world_state', {})
+            json_data = response.data[0].get("world_state", {})
             return WorldState(**json_data)
-            
+
     except Exception as e:
         print(f"Error fetching world state: {e}")
-        
+
     return WorldState()
 
 
-def update_world_state(project_id: str, changes_dict: dict):
-    if not supabase or not project_id:
-        print("Cannot update world state: No Supabase or Project ID.")
-        return
+def _resolve_world_state_value(current_value: Any, mutation_value: Any) -> Any:
+    """
+    Deterministic mutation resolver for Day 11 World State.
+
+    Supports:
+    - direct replacement
+    - {"$set": value}
+    - {"$add": number}
+    - {"$sub": number}
+    - {"$multiply": number}
+    """
+    if not isinstance(mutation_value, dict):
+        return mutation_value
+
+    if "$set" in mutation_value:
+        return mutation_value["$set"]
+
+    if "$add" in mutation_value:
+        try:
+            base = 0 if current_value is None else current_value
+            return base + mutation_value["$add"]
+        except Exception:
+            return mutation_value["$add"]
+
+    if "$sub" in mutation_value:
+        try:
+            base = 0 if current_value is None else current_value
+            return base - mutation_value["$sub"]
+        except Exception:
+            return mutation_value["$sub"]
+
+    if "$multiply" in mutation_value:
+        try:
+            base = 0 if current_value is None else current_value
+            return base * mutation_value["$multiply"]
+        except Exception:
+            return mutation_value["$multiply"]
+
+    return mutation_value
+
+
+def update_world_state(
+    project_id_or_world_state: Any = None,
+    changes_dict: Optional[dict] = None,
+    *,
+    project_id: Optional[str] = None,
+    world_state: Any = None,
+    mutations: Optional[dict] = None
+) -> Any:
+    """
+    Day 11 World State updater.
+
+    This function is now flexible so it can be used by:
+    1. Old code:
+       update_world_state(project_id, changes_dict)
+
+    2. Day 32 Narrative Engine:
+       update_world_state(world_state, mutations)
+
+    3. Explicit safe keyword form:
+       update_world_state(
+           project_id=project_id,
+           world_state=world_state,
+           mutations=mutations
+       )
+    """
+    resolved_project_id = project_id
+    resolved_changes = mutations if mutations is not None else changes_dict
+
+    if resolved_changes is None:
+        resolved_changes = {}
+
+    if isinstance(project_id_or_world_state, str):
+        resolved_project_id = project_id_or_world_state
+    elif project_id_or_world_state is not None:
+        world_state = project_id_or_world_state
+
+    if resolved_project_id is None:
+        resolved_project_id = get_latest_project_id()
+
+    if world_state is None:
+        base_state = get_world_state(resolved_project_id)
+    else:
+        base_state = world_state
+
+    if hasattr(base_state, "model_dump"):
+        state_dict = base_state.model_dump()
+    elif isinstance(base_state, dict):
+        state_dict = dict(base_state)
+    else:
+        state_dict = WorldState().model_dump()
+
+    if isinstance(resolved_changes, dict):
+        payload = resolved_changes
+
+        if "world_state" in payload and isinstance(payload["world_state"], dict):
+            payload = payload["world_state"]
+        elif "set" in payload and isinstance(payload["set"], dict):
+            payload = payload["set"]
+
+        for key, value in payload.items():
+            state_dict[key] = _resolve_world_state_value(
+                current_value=state_dict.get(key),
+                mutation_value=value
+            )
+
+    if supabase and resolved_project_id:
+        try:
+            supabase.table("projects").update(
+                {"world_state": state_dict}
+            ).eq("id", resolved_project_id).execute()
+
+            print(f"World state updated for project {resolved_project_id}: {resolved_changes}")
+
+        except Exception as e:
+            print(f"Error updating world state: {e}")
 
     try:
-        current_state = get_world_state(project_id)
-        state_dict = current_state.model_dump()
-        state_dict.update(changes_dict)
+        return WorldState(**state_dict)
+    except Exception:
+        return state_dict
 
-        response = supabase.table('projects').update({
-            'world_state': state_dict
-        }).eq('id', project_id).execute()
-
-        print(f"World state updated for project {project_id}: {changes_dict}")
-        return response
-
-    except Exception as e:
-        print(f"Error updating world state: {e}")
 
 # ==========================================
-# 6. DAY 12: NARRATIVE IMPACT (The Juice Translator)
+# DAY 12: NARRATIVE IMPACT (The Juice Translator)
 # ==========================================
 def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the object") -> str:
     if not client:
@@ -271,7 +442,7 @@ def generate_narrative_impact(juice: JuiceProfile, object_name: str = "the objec
 
 
 # ==========================================
-# 7. DAY 13: THE NARRATIVE SUMMARIZER (Context Pruning)
+# DAY 13: THE NARRATIVE SUMMARIZER (Context Pruning)
 # ==========================================
 def summarize_state(raw_history_json: str) -> list:
     if not client:
@@ -291,14 +462,14 @@ def summarize_state(raw_history_json: str) -> list:
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} 
+            response_format={"type": "json_object"}
         )
-        
+
         content = json.loads(response.choices[0].message.content)
         return content.get("truths", ["The world is currently calm."])
     except Exception as e:
@@ -307,7 +478,7 @@ def summarize_state(raw_history_json: str) -> list:
 
 
 # ==========================================
-# 8. DAY 14: FORCING THE UI BLUEPRINTS (The SaaS Killer)
+# DAY 14: FORCING THE UI BLUEPRINTS (The SaaS Killer)
 # ==========================================
 UI_SYSTEM_PROMPT = f"""
 You are the Camera AI UI Architect. 
@@ -319,13 +490,14 @@ Motion options: 'fade-in-up', 'scale-in'.
 {SECURITY_GUARDRAILS_PROMPT}
 """
 
+
 def get_ui_blueprint(user_request: str) -> dict:
     if not client:
         print("Error: Groq client is not initialized.")
         return None
 
     print(f"Camera AI is designing UI for: '{user_request}'...")
-    
+
     prompt = f"""
     The user wants to build an app for: "{user_request}"
     
@@ -345,72 +517,73 @@ def get_ui_blueprint(user_request: str) -> dict:
       }}
     }}
     """
-    
+
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant", 
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": UI_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2 
+            temperature=0.2
         )
-        
+
         raw_json = response.choices[0].message.content
         data = json.loads(raw_json)
-        
+
         app_dna = AppDNA(**data.get("app_dna", {}))
         design_tokens = DesignTokens(**data.get("design_tokens", {}))
-        
+
         print("Camera AI generated a flawless UI Blueprint!")
         return {"app_dna": app_dna, "design_tokens": design_tokens}
-        
+
     except Exception as e:
         print(f"Brain Error (Using Failsafe): {e}")
         return {
             "app_dna": AppDNA(
-                entity_name="Fallback Dashboard", 
+                entity_name="Fallback Dashboard",
                 required_components=[
-                    AppComponent(component_name="NavBar"), 
+                    AppComponent(component_name="NavBar"),
                     AppComponent(component_name="DataGrid")
                 ]
             ),
             "design_tokens": DesignTokens(
-                accent_primary="#3B82F6", 
-                spacing_unit=8, 
+                accent_primary="#3B82F6",
+                spacing_unit=8,
                 motion_entrance="fade-in-up"
             )
         }
 
+
 # ==========================================
-# 9. DAY 15: THE GENESIS DIRECTOR (BRAIN UPGRADE)
+# DAY 15: THE GENESIS DIRECTOR (BRAIN UPGRADE)
 # ==========================================
 def generate_genesis_scene(scene_prompt: str) -> dict:
     genome = ParametricGenome(
-        seed=4096, 
-        rules=["recursive_branch", "scale_down"], 
+        seed=4096,
+        rules=["recursive_branch", "scale_down"],
         scale_factor=1.5
     )
-    
+
     visual_query = VisualQuery(
-        search_terms=["cyberpunk", "neon", "building"], 
+        search_terms=["cyberpunk", "neon", "building"],
         fallback_flag=False,
         max_poly_count=10000
     )
-    
+
     camera_action = CameraAction(
-        movement_type="shaky_cam", 
-        duration_seconds=5.0, 
+        movement_type="shaky_cam",
+        duration_seconds=5.0,
         intensity=0.8
     )
-    
+
     vfx_profile = VFXProfile(
-        fog_density=0.6, 
-        rain_intensity=0.3, 
+        fog_density=0.6,
+        rain_intensity=0.3,
         neon_reflection=0.9
     )
-    
+
     return {
         "scene_prompt": scene_prompt,
         "parametric_genome": genome.model_dump(),
@@ -419,19 +592,23 @@ def generate_genesis_scene(scene_prompt: str) -> dict:
         "vfx_profile": vfx_profile.model_dump()
     }
 
+
 # ==========================================
-# 10. DAY 16: THE ECOSYSTEM DIRECTOR (Biome Math)
+# DAY 16: THE ECOSYSTEM DIRECTOR (Biome Math)
 # ==========================================
 def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
     if not client:
         print("Error: Groq client is not initialized.")
         return BiomeDNA(
-            name="Fallback Plains", elevation_curve=0.5, moisture_level=0.5, 
-            scatter_density=0.5, scatter_rules=[]
+            name="Fallback Plains",
+            elevation_curve=0.5,
+            moisture_level=0.5,
+            scatter_density=0.5,
+            scatter_rules=[]
         )
 
     print(f"Camera AI is designing an ecosystem for: '{user_prompt}'...")
-    
+
     system_prompt = f"""
     You are the Ecosystem Director for a deterministic 3D game engine. 
     You DO NOT place objects randomly. You define environmental math and ScatterRules.
@@ -439,7 +616,7 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Current World State: {world_state}
     User Request: {user_prompt}
@@ -468,30 +645,34 @@ def act_as_ecosystem_director(user_prompt: str, world_state: dict) -> BiomeDNA:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.7 
+            temperature=0.7
         )
-        
+
         raw_json = response.choices[0].message.content
-        
+
         biome_dna = BiomeDNA.model_validate_json(raw_json)
         print("Camera AI generated a flawless Biome Blueprint!")
         return biome_dna
-        
+
     except Exception as e:
         print(f"Brain Error (Using Failsafe): {e}")
         return BiomeDNA(
-            name="Error Plains", elevation_curve=0.5, moisture_level=0.5, 
-            scatter_density=0.5, scatter_rules=[]
+            name="Error Plains",
+            elevation_curve=0.5,
+            moisture_level=0.5,
+            scatter_density=0.5,
+            scatter_rules=[]
         )
 
+
 # ==========================================
-# 11. DAY 17: THE TRAFFIC DIRECTOR (Navigation Intent)
+# DAY 17: THE TRAFFIC DIRECTOR (Navigation Intent)
 # ==========================================
 def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) -> PathingIntent:
     if not client:
@@ -512,7 +693,7 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Entity ID: {entity_id}
     Current Position (x, z): {start_coords}
@@ -530,21 +711,21 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.4 
+            temperature=0.4
         )
-        
+
         raw_json = response.choices[0].message.content
-        
+
         intent = PathingIntent.model_validate_json(raw_json)
         print(f"Traffic Director issued Pathing Intent to {intent.target_coords}!")
         return intent
-        
+
     except Exception as e:
         print(f"Brain Error (Traffic Director Failsafe): {e}")
         return PathingIntent(
@@ -553,8 +734,9 @@ def decide_navigation_intent(entity_id: str, start_coords: tuple, context: str) 
             target_coords=start_coords
         )
 
+
 # ==========================================
-# 12. DAY 18: THE BACKEND ARCHITECT DIRECTOR (FIXED TEMPLATE)
+# DAY 18: THE BACKEND ARCHITECT DIRECTOR
 # ==========================================
 def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
     if not client:
@@ -567,7 +749,7 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
         )
 
     print(f"Backend Architect is designing architecture for: '{entity_prompt}'...")
-    
+
     system_prompt = f"""
     You are the OGF Backend Architect. Your ONLY job is to design the architecture 
     for a backend API by filling out a strict JSON form.
@@ -576,7 +758,7 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_prompt = f"""
     Design the backend architecture for this entity: {entity_prompt}
     
@@ -596,24 +778,24 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
     
     Change the values to match the requested entity, but KEEP THE EXACT KEY NAMES AND LIST STRUCTURE.
     """
-    
+
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            response_format={"type": "json_object"}, 
+            response_format={"type": "json_object"},
             temperature=0.1
         )
-        
+
         raw_json = response.choices[0].message.content
-        
+
         dna = LogicDNA.model_validate_json(raw_json)
         print("Backend Architect generated a flawless LogicDNA!")
         return dna
-        
+
     except Exception as e:
         print(f"[ERROR] The Architect Brain failed to fill out the form: {e}")
         return LogicDNA(
@@ -623,8 +805,9 @@ def act_as_backend_architect(entity_prompt: str) -> LogicDNA:
             database_schema="Fallback schema"
         )
 
+
 # ==========================================
-# 13. DAY 20: THE DEVOPS DIRECTOR (Deployment Topology)
+# DAY 20: THE DEVOPS DIRECTOR (Deployment Topology)
 # ==========================================
 def generate_deployment_topology(world_state: WorldState, app_complexity: str = "lightweight") -> DeployDNA:
     if not client:
@@ -637,7 +820,7 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
         )
 
     print("DevOps Director is determining deployment topology...")
-    
+
     system_prompt = f"""
     You are the DevOps Director for the Ontological Genesis Framework.
     Your job is to determine the exact deployment topology based on the 
@@ -650,7 +833,7 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_prompt = f"""
     Current World State Heat Level: {world_state.heat_level}
     Current Time of Day: {world_state.time_of_day}
@@ -668,23 +851,23 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
     }}
     Change the values to fit the context, but KEEP THE EXACT KEY NAMES AND TYPES.
     """
-    
+
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"}
         )
-        
+
         raw_json = response.choices[0].message.content
-        
+
         deploy_dna = DeployDNA.model_validate_json(raw_json)
         print("DevOps Director generated flawless DeployDNA!")
         return deploy_dna
-        
+
     except Exception as e:
         print(f"Brain Error (DevOps Director Failsafe): {e}")
         return DeployDNA(
@@ -694,8 +877,9 @@ def generate_deployment_topology(world_state: WorldState, app_complexity: str = 
             asset_cdn_url=None
         )
 
+
 # ==========================================
-# 14. DAY 21: THE MULTIPLAYER DIRECTOR (BRAIN UPGRADE)
+# DAY 21: THE MULTIPLAYER DIRECTOR (BRAIN UPGRADE)
 # ==========================================
 def generate_multiplayer_intent(action_description: str, current_world_state: dict) -> StateDelta:
     if not client:
@@ -703,9 +887,9 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
         return StateDelta()
 
     print(f"Multiplayer Director is analyzing intent for: '{action_description}'...")
-    
+
     delta_schema = StateDelta.model_json_schema()
-    
+
     system_prompt = f"""
     You are the Multiplayer Director for a deterministic game engine.
     Your job is to calculate the exact mathematical difference (the StateDelta) that needs to be broadcast to all other players.
@@ -717,7 +901,7 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_prompt = f"""
     The current world state is: {json.dumps(current_world_state, indent=2)}
     
@@ -737,20 +921,21 @@ def generate_multiplayer_intent(action_description: str, current_world_state: di
             response_format={"type": "json_object"},
             temperature=0.1
         )
-        
+
         raw_json_string = response.choices[0].message.content
         raw_dict = json.loads(raw_json_string)
-        
+
         validated_delta = StateDelta(**raw_dict)
         print("Multiplayer Director generated a flawless StateDelta!")
         return validated_delta
-        
+
     except Exception as e:
         print(f"Brain Error (Multiplayer Director Failsafe): {e}")
         return StateDelta()
 
+
 # ==========================================
-# 15. DAY 24: THE FOLEY DIRECTOR (Procedural Audio)
+# DAY 24: THE FOLEY DIRECTOR (Procedural Audio)
 # ==========================================
 def act_as_foley_director(entity_description: str) -> AudioDNA:
     if not client:
@@ -758,7 +943,7 @@ def act_as_foley_director(entity_description: str) -> AudioDNA:
         return AudioDNA()
 
     print(f"Foley Director is designing the soundscape for: '{entity_description}'...")
-    
+
     system_prompt = f"""
     You are the Foley Director and Master Sound Designer for a deterministic 3D game engine.
     You DO NOT use audio files (.mp3, .wav). You ONLY design mathematical sound waves using AudioDNA.
@@ -769,7 +954,7 @@ def act_as_foley_director(entity_description: str) -> AudioDNA:
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Entity Description: {entity_description}
     
@@ -791,7 +976,7 @@ def act_as_foley_director(entity_description: str) -> AudioDNA:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
@@ -799,19 +984,20 @@ def act_as_foley_director(entity_description: str) -> AudioDNA:
             response_format={"type": "json_object"},
             temperature=0.6
         )
-        
+
         raw_json = response.choices[0].message.content
-        
+
         audio_dna = AudioDNA.model_validate_json(raw_json)
         print("Foley Director generated flawless AudioDNA!")
         return audio_dna
-        
+
     except Exception as e:
         print(f"Brain Error (Foley Director Failsafe): {e}")
         return AudioDNA()
 
+
 # ==========================================
-# 16. DAY 25: THE CONTROL DIRECTOR (Input Wiring)
+# DAY 25: THE CONTROL DIRECTOR (Input Wiring)
 # ==========================================
 def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
     if not client:
@@ -819,7 +1005,7 @@ def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
         return []
 
     print(f"Control Director is wiring inputs for: '{mechanic_description}'...")
-    
+
     system_prompt = f"""
     You are the Control Director for a deterministic 3D game engine.
     Your job is to invent the input controls for new game mechanics, vehicles, or items.
@@ -830,7 +1016,7 @@ def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Mechanic Description: {mechanic_description}
     
@@ -859,30 +1045,31 @@ def act_as_control_director(mechanic_description: str) -> List[InputDNA]:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.4 
+            temperature=0.4
         )
-        
+
         raw_json = response.choices[0].message.content
         parsed_data = json.loads(raw_json)
-        
+
         inputs_list = parsed_data.get("inputs", [])
         validated_inputs = [InputDNA(**item) for item in inputs_list]
-        
+
         print(f"Control Director wired {len(validated_inputs)} inputs flawlessly!")
         return validated_inputs
-        
+
     except Exception as e:
         print(f"Brain Error (Control Director Failsafe): {e}")
         return []
 
+
 # ==========================================
-# 17. DAY 26: THE MOD CURATOR (AI Librarian)
+# DAY 26: THE MOD CURATOR (AI Librarian)
 # ==========================================
 class ModCurator:
     def generate_tags(self, mod: ModDNA) -> ModMetadata:
@@ -891,7 +1078,7 @@ class ModCurator:
             return mod.metadata
 
         print(f"Curator is analyzing mod: {mod.mod_name}")
-        
+
         mod_summary = {
             "mod_name": mod.mod_name,
             "nodes_count": len(mod.injected_nodes),
@@ -914,27 +1101,28 @@ class ModCurator:
         try:
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile", 
+                model="llama-3.3-70b-versatile",
                 temperature=0.2,
                 max_tokens=50,
                 response_format={"type": "json_object"}
             )
-            
+
             raw_response = chat_completion.choices[0].message.content
             parsed = json.loads(raw_response)
-            
+
             tags_list = parsed.get("tags", [])
             if not isinstance(tags_list, list):
                 tags_list = []
-                
+
             print(f"Curator generated tags: {tags_list}")
-            
+
             new_metadata_dict = mod.metadata.model_dump()
             existing_tags = set(new_metadata_dict.get("tags", []))
+
             for tag in tags_list:
                 if isinstance(tag, str) and tag not in existing_tags:
                     new_metadata_dict["tags"].append(tag)
-                    
+
             return ModMetadata(**new_metadata_dict)
 
         except Exception as e:
@@ -943,19 +1131,15 @@ class ModCurator:
 
 
 # ==========================================
-# 18. DAY 27: THE TRANSLATION DIRECTOR (Semantic Dialogue)
+# DAY 27: THE TRANSLATION DIRECTOR (Semantic Dialogue)
 # ==========================================
 def act_as_translation_director(narrative_context: str, locale: LocaleDNA) -> List[SemanticToken]:
-    """
-    DAY 27: THE TRANSLATION DIRECTOR.
-    Forces the AI to act as a Universal Concept Generator.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
-        return [] # Safe empty list
+        return []
 
     print(f"Translation Director is extracting concepts for: '{narrative_context}'...")
-    
+
     system_prompt = f"""
     You are the Translation Director for the Ontological Genesis Framework.
     Your absolute rule: You are COMPLETELY FORBIDDEN from writing human words, sentences, or raw text.
@@ -973,7 +1157,7 @@ def act_as_translation_director(narrative_context: str, locale: LocaleDNA) -> Li
     
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Narrative Context: {narrative_context}
     Target Locale (for your awareness, but DO NOT write in this language): {locale.target_language}
@@ -1000,38 +1184,33 @@ def act_as_translation_director(narrative_context: str, locale: LocaleDNA) -> Li
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.3 # Keep it strict and conceptual
+            temperature=0.3
         )
-        
+
         raw_json = response.choices[0].message.content
         parsed_data = json.loads(raw_json)
-        
-        # Extract the list and force it through our Pydantic Bouncer
+
         tokens_list = parsed_data.get("tokens", [])
         validated_tokens = [SemanticToken(**item) for item in tokens_list]
-        
+
         print(f"Translation Director extracted {len(validated_tokens)} pure concepts. Zero raw text leaked!")
         return validated_tokens
-        
+
     except Exception as e:
         print(f"Brain Error (Translation Director Failsafe): {e}")
-        return [] # Returns an empty list so the engine doesn't crash
+        return []
 
 
 # ==========================================
-# 19. DAY 28: THE ECONOMY DIRECTOR (Math Balancing)
+# DAY 28: THE ECONOMY DIRECTOR (Math Balancing)
 # ==========================================
 def act_as_economy_director(entity_description: str) -> EconomyDNA:
-    """
-    DAY 28: THE ECONOMY DIRECTOR.
-    Forces the AI to act as an Economic Flow Designer.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return EconomyDNA(
@@ -1043,7 +1222,7 @@ def act_as_economy_director(entity_description: str) -> EconomyDNA:
         )
 
     print(f"Economy Director is balancing the flow for: '{entity_description}'...")
-    
+
     system_prompt = f"""
     You are the Economy Director for a deterministic 3D game engine.
     You DO NOT output raw prices, loot amounts, or hardcoded numbers like '500 gold'.
@@ -1059,7 +1238,7 @@ def act_as_economy_director(entity_description: str) -> EconomyDNA:
 
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Entity Description: {entity_description}
     
@@ -1082,21 +1261,21 @@ def act_as_economy_director(entity_description: str) -> EconomyDNA:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2 # Keep it strict and mathematical
+            temperature=0.2
         )
-        
+
         raw_json = response.choices[0].message.content
-        
+
         economy_dna = EconomyDNA.model_validate_json(raw_json)
         print("Economy Director generated flawless EconomyDNA! Zero raw numbers leaked.")
         return economy_dna
-        
+
     except Exception as e:
         print(f"Brain Error (Economy Director Failsafe): {e}")
         return EconomyDNA(
@@ -1107,22 +1286,17 @@ def act_as_economy_director(entity_description: str) -> EconomyDNA:
             inflation_cap=100.0
         )
 
+
 # ==========================================
-# 20. DAY 29: THE MENTOR DIRECTOR (Dynamic Onboarding)
+# DAY 29: THE MENTOR DIRECTOR (Dynamic Onboarding)
 # ==========================================
 def act_as_mentor_director(mechanic_description: str) -> List[TutorialDNA]:
-    """
-    DAY 29: THE MENTOR DIRECTOR.
-    Commands the AI to automatically write the TutorialDNA alongside any new mechanic.
-    It is STRICTLY FORBIDDEN from writing hardcoded text boxes.
-    It ONLY outputs the mathematical triggers and visual hint types.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return []
 
     print(f"Mentor Director is designing invisible onboarding for: '{mechanic_description}'...")
-    
+
     system_prompt = f"""
     You are the Mentor Director for a deterministic 3D game engine.
     Your job is to design the invisible, adaptive onboarding (TutorialDNA) for new game mechanics.
@@ -1133,7 +1307,7 @@ def act_as_mentor_director(mechanic_description: str) -> List[TutorialDNA]:
     
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Mechanic Description: {mechanic_description}
     
@@ -1158,38 +1332,33 @@ def act_as_mentor_director(mechanic_description: str) -> List[TutorialDNA]:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.5 
+            temperature=0.5
         )
-        
+
         raw_json = response.choices[0].message.content
         parsed_data = json.loads(raw_json)
-        
+
         tutorials_list = parsed_data.get("tutorials", [])
         validated_tutorials = [TutorialDNA(**item) for item in tutorials_list]
-        
+
         print(f"Mentor Director designed {len(validated_tutorials)} invisible onboarding rules flawlessly!")
         return validated_tutorials
-        
+
     except Exception as e:
         print(f"Brain Error (Mentor Director Failsafe): {e}")
         return []
 
+
 # ==========================================
-# 21. DAY 30: THE TIME DIRECTOR (BRAIN UPGRADE)
+# DAY 30: THE TIME DIRECTOR (BRAIN UPGRADE)
 # ==========================================
 def act_as_time_director(world_state: WorldState) -> dict:
-    """
-    DAY 30: THE TIME DIRECTOR.
-    Analyzes the WorldState (specifically the 'heat_level' or tension) 
-    and dynamically adjusts how often we create ChronoDNA checkpoints 
-    and how far back the player is allowed to rewind.
-    """
     if not client:
         print("Error: Groq client is not initialized.")
         return {
@@ -1198,7 +1367,7 @@ def act_as_time_director(world_state: WorldState) -> dict:
             "reasoning": "Safe Fallback (No Groq)"
         }
 
-    heat = getattr(world_state, 'heat_level', 0)
+    heat = getattr(world_state, "heat_level", 0)
     print(f"Time Director is analyzing tension (Heat Level: {heat})...")
 
     system_prompt = f"""
@@ -1208,7 +1377,7 @@ def act_as_time_director(world_state: WorldState) -> dict:
     
     {SECURITY_GUARDRAILS_PROMPT}
     """
-    
+
     user_message = f"""
     Current World Heat Level (Tension): {heat} (0 is calm, 5 is chaotic boss fight).
     
@@ -1227,18 +1396,18 @@ def act_as_time_director(world_state: WorldState) -> dict:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1 # Low temperature for strict, logical math.
+            temperature=0.1
         )
-        
+
         raw_json = response.choices[0].message.content
         decision = json.loads(raw_json)
-        
+
         print(f"[TIME DIRECTOR] 🧠 Tension: {heat} | Decision: {decision.get('reasoning', 'Unknown')}")
         return decision
 
@@ -1252,27 +1421,8 @@ def act_as_time_director(world_state: WorldState) -> dict:
 
 
 # ==========================================
-# 22. DAY 31: THE EMPATHY DIRECTOR (ACCESSIBILITY HOLE)
+# DAY 31: THE EMPATHY DIRECTOR (ACCESSIBILITY HOLE)
 # ==========================================
-# The Empathy Director reads:
-# - current AccessibilityDNA
-# - TelemetryDNA / PerformanceReport
-# - MasteryEvents
-# - explicit player preferences
-#
-# Then it outputs pure AccessibilityDNA JSON.
-#
-# It NEVER outputs:
-# - raw CSS
-# - raw HTML
-# - raw code
-# - hardcoded timings
-# - raw camera values
-# - raw audio code
-#
-# Accessibility remains pure, reactive DNA.
-# ==========================================
-
 ACCESSIBILITY_ALLOWED_VALUES: Dict[str, List[str]] = {
     "cognitive_load_level": [
         "minimal",
@@ -1304,9 +1454,6 @@ ACCESSIBILITY_ALLOWED_VALUES: Dict[str, List[str]] = {
 
 
 def _get_field(source: Any, key: str, default: Any = None) -> Any:
-    """
-    Safely read a field from a dict, Pydantic model, or object.
-    """
     if source is None:
         return default
 
@@ -1325,9 +1472,6 @@ def _get_field(source: Any, key: str, default: Any = None) -> Any:
 
 
 def _first_present(*values: Any) -> Any:
-    """
-    Return the first value that is not None.
-    """
     for value in values:
         if value is not None:
             return value
@@ -1337,9 +1481,6 @@ def _first_present(*values: Any) -> Any:
 def _coerce_accessibility_base(
     accessibility: Optional[Union[AccessibilityDNA, Dict[str, Any]]]
 ) -> AccessibilityDNA:
-    """
-    Safely convert incoming accessibility data into AccessibilityDNA.
-    """
     if accessibility is None:
         return AccessibilityDNA()
 
@@ -1363,10 +1504,6 @@ def _merge_explicit_accessibility(
     base: AccessibilityDNA,
     explicit_preferences: Optional[Dict[str, Any]]
 ) -> AccessibilityDNA:
-    """
-    Explicit player preferences always win over automatic adaptation,
-    but only if the values are valid AccessibilityDNA values.
-    """
     if not explicit_preferences or not isinstance(explicit_preferences, dict):
         return base
 
@@ -1389,9 +1526,6 @@ def _summarize_telemetry_for_empathy(
     telemetry: Optional[Union[TelemetryDNA, Dict[str, Any]]] = None,
     performance_report: Optional[Union[PerformanceReport, Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """
-    Build a small, safe telemetry summary for the Empathy Director.
-    """
     frame_drops = _first_present(
         _get_field(telemetry, "frame_drops"),
         _get_field(telemetry, "dropped_frames"),
@@ -1446,10 +1580,6 @@ def _summarize_telemetry_for_empathy(
 def _summarize_mastery_for_empathy(
     mastery_events: Optional[List[Union[MasteryEvent, Dict[str, Any]]]] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Build a small, safe mastery summary for the Empathy Director.
-    Only the most recent 5 mastery events are used.
-    """
     if not mastery_events or not isinstance(mastery_events, list):
         return []
 
@@ -1479,17 +1609,6 @@ def act_as_empathy_director(
     explicit_preferences: Optional[Dict[str, Any]] = None,
     player_context: str = ""
 ) -> AccessibilityDNA:
-    """
-    DAY 31: THE EMPATHY DIRECTOR.
-
-    The Brain acts as a protective, compassionate director.
-    It outputs AccessibilityDNA only.
-
-    It never writes raw CSS.
-    It never writes raw timings.
-    It never writes raw camera code.
-    It never writes raw audio code.
-    """
     base_accessibility = _coerce_accessibility_base(current_accessibility)
     base_accessibility = _merge_explicit_accessibility(base_accessibility, explicit_preferences)
 
@@ -1499,7 +1618,6 @@ def act_as_empathy_director(
 
     print("Empathy Director is reading the player's comfort signals...")
 
-    # Use the deterministic Cognitive Load Evaluator if available.
     cognitive_load_score = None
 
     if default_accessibility_engine is not None:
@@ -1647,7 +1765,6 @@ No explanations.
             previous_raw = response.choices[0].message.content
             parsed = json.loads(previous_raw)
 
-            # Some models may wrap the DNA inside another key.
             if isinstance(parsed, dict):
                 wrapper_keys = (
                     "accessibility",
@@ -1664,7 +1781,6 @@ No explanations.
 
             accessibility_dna = AccessibilityDNA(**parsed)
 
-            # Explicit preferences remain the highest truth.
             accessibility_dna = _merge_explicit_accessibility(
                 accessibility_dna,
                 explicit_preferences
@@ -1679,3 +1795,488 @@ No explanations.
 
     print("Empathy Director using safe AccessibilityDNA failsafe.")
     return base_accessibility
+
+
+# ==========================================
+# DAY 32: THE STORY WEAVER (QUEST HOLE)
+# ==========================================
+# The Story Weaver generates QuestDNA.
+#
+# It NEVER writes dialogue.
+# It NEVER writes hardcoded quest scripts.
+# It NEVER writes branching text trees.
+#
+# It outputs only:
+# - semantic story concepts
+# - graph nodes
+# - graph edges
+# - deterministic completion conditions
+# - deterministic World State mutations
+#
+# The Narrative Engine then validates the graph as a DAG.
+# ==========================================
+
+QUEST_SYSTEM_PROMPT = f"""
+You are the Story Weaver inside the Ontological Genesis Engine.
+
+Your job is to generate QuestDNA.
+
+ABSOLUTE RULES:
+1. Output ONLY valid JSON.
+2. Do NOT output markdown.
+3. Do NOT output explanations.
+4. Do NOT output raw dialogue.
+5. Do NOT output hardcoded quest scripts.
+6. Do NOT output branching dialogue trees.
+7. The quest must be a Directed Acyclic Graph.
+8. No circular dependencies are allowed.
+9. Every edge must reference existing node_id values.
+10. Every node_id must be unique.
+11. Story beats must be semantic concepts, not literal lines of dialogue.
+12. Quest completion must deterministically mutate World State.
+13. Respect the World Truths. Do not contradict them.
+
+Return JSON using this exact shape:
+
+{{
+  "quest_id": "string",
+  "nodes": [
+    {{
+      "node_id": "string",
+      "semantic_concept": "string",
+      "completion_condition": {{}},
+      "state_mutations": {{}}
+    }}
+  ],
+  "edges": [
+    {{
+      "from_node": "string",
+      "to_node": "string"
+    }}
+  ],
+  "prerequisites": [],
+  "state_mutations": {{}}
+}}
+
+Valid completion_condition examples:
+
+{{
+  "type": "always"
+}}
+
+{{
+  "type": "world_state_flag",
+  "key": "ruins_discovered",
+  "value": true
+}}
+
+{{
+  "type": "world_state_equals",
+  "key": "heat_level",
+  "value": 2
+}}
+
+{{
+  "type": "node_completed",
+  "node_id": "node_enter_ruins"
+}}
+
+Valid state_mutations examples:
+
+{{
+  "heat_level": 1
+}}
+
+{{
+  "time_of_day": "18:00"
+}}
+
+{{
+  "ruins_discovered": true
+}}
+
+{{
+  "heat_level": {{"$add": 1}}
+}}
+
+{SECURITY_GUARDRAILS_PROMPT}
+""".strip()
+
+
+def _normalize_quest_payload(data: Any, max_nodes: int = 3) -> Dict[str, Any]:
+    """
+    Normalize raw AI JSON into safe QuestDNA-shaped data.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("QuestDNA JSON root must be an object.")
+
+    wrapper_keys = (
+        "quest",
+        "quest_dna",
+        "QuestDNA",
+        "data",
+        "result"
+    )
+
+    for key in wrapper_keys:
+        if key in data and isinstance(data[key], dict):
+            data = data[key]
+            break
+
+    if not data.get("quest_id"):
+        data["quest_id"] = f"quest_{uuid.uuid4().hex[:8]}"
+
+    nodes = data.get("nodes", [])
+
+    if not isinstance(nodes, list):
+        nodes = []
+
+    normalized_nodes: List[Dict[str, Any]] = []
+
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            continue
+
+        if not node.get("node_id"):
+            node["node_id"] = f"node_{index + 1}"
+
+        if not node.get("semantic_concept"):
+            node["semantic_concept"] = "unknown_story_beat"
+
+        if not isinstance(node.get("completion_condition"), dict):
+            node["completion_condition"] = {}
+
+        if not isinstance(node.get("state_mutations"), dict):
+            node["state_mutations"] = {}
+
+        normalized_nodes.append(node)
+
+    data["nodes"] = normalized_nodes
+
+    edges = data.get("edges", [])
+
+    if not isinstance(edges, list):
+        edges = []
+
+    normalized_edges: List[Dict[str, Any]] = []
+
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+
+        if "from_node" not in edge:
+            if "from" in edge:
+                edge["from_node"] = edge["from"]
+            elif "source" in edge:
+                edge["from_node"] = edge["source"]
+            elif "from_id" in edge:
+                edge["from_node"] = edge["from_id"]
+            elif "source_node" in edge:
+                edge["from_node"] = edge["source_node"]
+
+        if "to_node" not in edge:
+            if "to" in edge:
+                edge["to_node"] = edge["to"]
+            elif "target" in edge:
+                edge["to_node"] = edge["target"]
+            elif "to_id" in edge:
+                edge["to_node"] = edge["to_id"]
+            elif "target_node" in edge:
+                edge["to_node"] = edge["target_node"]
+
+        normalized_edges.append(edge)
+
+    data["edges"] = normalized_edges
+
+    if not isinstance(data.get("prerequisites"), list):
+        data["prerequisites"] = []
+
+    if not isinstance(data.get("state_mutations"), dict):
+        data["state_mutations"] = {}
+
+    if max_nodes and len(data["nodes"]) > max_nodes:
+        kept_nodes = data["nodes"][:max_nodes]
+        kept_node_ids = set()
+
+        for node in kept_nodes:
+            if isinstance(node, dict) and node.get("node_id"):
+                kept_node_ids.add(node["node_id"])
+
+        safe_edges = []
+
+        for edge in data["edges"]:
+            if not isinstance(edge, dict):
+                continue
+
+            from_node = edge.get("from_node")
+            to_node = edge.get("to_node")
+
+            if from_node in kept_node_ids and to_node in kept_node_ids:
+                safe_edges.append(edge)
+
+        data["nodes"] = kept_nodes
+        data["edges"] = safe_edges
+
+    return data
+
+
+def generate_quest_dna_report(
+    quest_intent: Optional[str] = None,
+    max_nodes: int = 3,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> Dict[str, Any]:
+    """
+    Generate QuestDNA using:
+    1. Day 11 World State
+    2. Day 13 Context Pruning / World Truths
+    3. Groq JSON forcing
+    4. Pydantic validation
+    5. Day 32 DAG validation
+    6. Self-correction loop
+    """
+    if not client:
+        return {
+            "success": False,
+            "quest": None,
+            "quest_json": None,
+            "validation": None,
+            "attempts": 0,
+            "raw_response": "",
+            "errors": ["Groq client is not initialized."]
+        }
+
+    if NarrativeEngine is None:
+        return {
+            "success": False,
+            "quest": None,
+            "quest_json": None,
+            "validation": None,
+            "attempts": 0,
+            "raw_response": "",
+            "errors": ["NarrativeEngine is not available. Check packages/core/narrative_engine.py."]
+        }
+
+    if project_id is None:
+        project_id = get_latest_project_id()
+
+    if world_state is None:
+        world_state = get_world_state(project_id)
+
+    if hasattr(world_state, "model_dump"):
+        state_payload = world_state.model_dump()
+    elif isinstance(world_state, dict):
+        state_payload = world_state
+    else:
+        state_payload = {"world_state": str(world_state)}
+
+    raw_state_json = json.dumps(state_payload, default=str)
+    world_truths = summarize_state(raw_state_json)
+
+    truths_string = "\n".join([f"- {truth}" for truth in world_truths])
+
+    intent_text = (
+        quest_intent
+        if quest_intent
+        else "Generate a logically coherent quest that emerges from the current World Truths."
+    )
+
+    state_summary = (
+        f"Heat Level: {state_payload.get('heat_level', 0)} | "
+        f"Time of Day: {state_payload.get('time_of_day', '12:00')}"
+    )
+
+    user_message = f"""
+World Truths:
+{truths_string}
+
+Current World State Summary:
+{state_summary}
+
+Quest Intent:
+{intent_text}
+
+Maximum allowed narrative nodes:
+{max_nodes}
+
+Generate a new QuestDNA object.
+
+Remember:
+- The quest must logically follow the permanent state of the world.
+- The graph must be a DAG.
+- No loops.
+- No raw dialogue.
+- Only semantic concepts.
+- Only valid JSON.
+""".strip()
+
+    messages = [
+        {"role": "system", "content": QUEST_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message}
+    ]
+
+    errors: List[str] = []
+    last_raw_response = ""
+    last_error = ""
+    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    for attempt in range(1, 4):
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=2000
+            )
+
+            raw_json = response.choices[0].message.content
+            last_raw_response = raw_json
+
+            data = json.loads(raw_json)
+            data = _normalize_quest_payload(data, max_nodes=max_nodes)
+
+            quest = QuestDNA(**data)
+
+            engine = NarrativeEngine()
+            validation = engine.validate_quest_dna(quest)
+
+            if not validation["is_valid"]:
+                reroll_prompt = validation.get("reroll_prompt")
+
+                if reroll_prompt:
+                    raise ValueError(reroll_prompt)
+
+                raise ValueError(
+                    "QuestDNA failed DAG validation: "
+                    + "; ".join(validation.get("errors", []))
+                )
+
+            print("Story Weaver generated flawless QuestDNA!")
+
+            return {
+                "success": True,
+                "quest": quest,
+                "quest_json": quest.model_dump(),
+                "validation": validation,
+                "attempts": attempt,
+                "raw_response": raw_json,
+                "errors": []
+            }
+
+        except Exception as e:
+            last_error = str(e)
+            errors.append(last_error)
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": last_raw_response or "{}"
+                }
+            )
+
+            correction_message = f"""
+Your previous QuestDNA output was invalid.
+
+Error:
+{last_error}
+
+Regenerate the QuestDNA again.
+
+Rules:
+- Output ONLY valid JSON.
+- No markdown.
+- No explanations.
+- No raw dialogue.
+- No circular graph dependencies.
+- Every edge must reference existing node_id values.
+- Every node_id must be unique.
+- Use the exact QuestDNA schema.
+""".strip()
+
+            messages.append(
+                {
+                    "role": "user",
+                    "content": correction_message
+                }
+            )
+
+    print("Story Weaver failed after 3 attempts. Using safe failure report.")
+
+    return {
+        "success": False,
+        "quest": None,
+        "quest_json": None,
+        "validation": None,
+        "attempts": 3,
+        "raw_response": last_raw_response,
+        "errors": errors
+    }
+
+
+def generate_quest_dna(
+    quest_intent: Optional[str] = None,
+    max_nodes: int = 3,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> Optional[QuestDNA]:
+    """
+    Convenience wrapper.
+
+    Returns only the validated QuestDNA object, or None if generation fails.
+    """
+    report = generate_quest_dna_report(
+        quest_intent=quest_intent,
+        max_nodes=max_nodes,
+        project_id=project_id,
+        world_state=world_state
+    )
+
+    return report.get("quest")
+
+
+def progress_quest_node(
+    quest: Union[QuestDNA, Dict[str, Any]],
+    node_id: str,
+    project_id: Optional[str] = None,
+    world_state: Any = None,
+    completed_node_ids: Optional[List[str]] = None,
+    condition_context: Optional[Dict[str, Any]] = None,
+    force: bool = False
+) -> Dict[str, Any]:
+    """
+    Complete one QuestDNA node and deterministically mutate Day 11 World State.
+    """
+    if NarrativeEngine is None:
+        return {
+            "success": False,
+            "errors": ["NarrativeEngine is not available. Check packages/core/narrative_engine.py."]
+        }
+
+    if isinstance(quest, dict):
+        quest = QuestDNA(**quest)
+
+    if project_id is None:
+        project_id = get_latest_project_id()
+
+    if world_state is None:
+        world_state = get_world_state(project_id)
+
+    engine = NarrativeEngine()
+
+    def _update_world_state(ws: Any, changes: Dict[str, Any]) -> Any:
+        return update_world_state(
+            project_id=project_id,
+            world_state=ws,
+            mutations=changes
+        )
+
+    return engine.complete_node(
+        quest=quest,
+        node_id=node_id,
+        world_state=world_state,
+        completed_node_ids=completed_node_ids,
+        condition_context=condition_context,
+        force=force,
+        update_world_state_fn=_update_world_state
+    )

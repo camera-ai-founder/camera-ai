@@ -1,260 +1,132 @@
 {
-    "project_name": "Ontological Genesis Fabric",
-    "current_day": 30,
-    "status": "COMPLETE",
-    "achievements_today": [
-        "Added ChronoDNA and RewindIntent Pydantic schemas (Step 1)",
-        "Built Deterministic Seed Engine for math reproducibility (Step 2)",
-        "Created lightweight JavaScript Input Recorder Black Box (Step 3)",
-        "Secured Supabase 'chrono_checkpoints' table with RLS (Step 4)",
-        "Implemented mathematical Rewind Engine with zero RAM bloat (Step 5)",
-        "Upgraded Brain with dynamic Time Director for tension-based saving (Step 6)",
-        "Integrated 'chrono test' command into CLI Holodeck (Step 7)",
-        "Verified time travel math in Terminal and Browser (Step 8)"
+  "day": 32,
+  "day_31_complete": true,
+  "day_32_complete": true,
+  "current_task": "Day 32 Complete: Procedural Narrative Graphs & DAG Validation. Ready for Day 33.",
+  "completed_days": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+  ],
+  "world_state": {
+    "nodes": [],
+    "global_gravity": [
+      0.0,
+      -9.81,
+      0.0
     ],
-    "next_milestone": "Day 31: The IDE Extension (The DNA Mutator Webview Bridge)",
-    "laptop_status": "Safe, cool, and running perfectly on 8GB RAM.",
-    "paradigm": "Anti-Tool Doctrine Active. JSON DNA is the only truth.",
-    "accessibility_dna": {
-        "cognitive_load_level": "balanced",
-        "motor_assist_mode": "generous_timing",
-        "visual_contrast_profile": "high_contrast",
-        "audio_cue_amplification": "high",
-        "camera_comfort_mode": "reduced_motion"
+    "heat_level": 0,
+    "time_of_day": "12:00"
+  },
+  "quests": [],
+  "app_dna": {
+    "app_name": "Genesis Engine v1",
+    "version": "0.1.0",
+    "entity_name": "Genesis App",
+    "design_tokens": {
+      "primary_color": "#0F172A",
+      "accent_color": "#38BDF8",
+      "background_color": "#FFFFFF",
+      "accent_primary": "#3B82F6",
+      "spacing_unit": 8,
+      "motion_entrance": "fade-in-up"
     },
-    "app_dna": {
-        "app_name": "Genesis Engine v1",
-        "version": "0.1.0",
-        "entity_name": "Genesis App",
-        "world_state": {
-            "nodes": [],
-            "global_gravity": [
-                0.0,
-                -9.81,
-                0.0
-            ],
-            "heat_level": 0,
-            "time_of_day": "12:00"
-        },
-        "design_tokens": {
-            "primary_color": "#0F172A",
-            "accent_color": "#1C5E7C",
-            "background_color": "#FFFFFF",
-            "accent_primary": "#2857A5",
-            "spacing_unit": 8,
-            "motion_entrance": "fade-in-up",
-            "text_color": "#000000"
-        },
-        "primitives": [],
-        "physics": {
-            "gravity": [
-                0.0,
-                -9.81,
-                0.0
-            ],
-            "timestep": 0.016666666666666666,
-            "max_substeps": 5
-        },
-        "drama_budget": {
-            "max_entities": 500,
-            "max_particles": 10000,
-            "max_lights": 8,
-            "max_draw_calls": 200
-        },
-        "ecs": {
-            "archetypes": [],
-            "chunk_size": 64,
-            "enable_parallel_systems": true
-        },
-        "shaders": [],
-        "narrative_context": {
-            "token_budgets": {
-                "max_context_tokens": 4000,
-                "max_prompt_tokens": 1000,
-                "max_response_tokens": 2000
-            },
-            "pruning_strategy": "semantic_relevance",
-            "embedding_model": "text-embedding-3-small"
-        },
-        "meta_prompt": {
-            "system_prompt_template": "You are the Genesis Engine...",
-            "context_injection_points": [
-                "world_state",
-                "drama_budget"
-            ],
-            "force_json_output": true
-        },
-        "latency_logic": {
-            "rules": {
-                "primary_tier": "local",
-                "fallback_tier": "cloud",
-                "timeout_ms": 500,
-                "max_retries": 2
-            },
-            "predictive_prefetch": true
-        },
-        "ui_compiler": {
-            "framework": "react",
-            "styling_engine": "tailwind",
-            "components": [],
-            "atomic_tokens": {
-                "base_theme": "default",
-                "scale": {
-                    "spacing": [
-                        0,
-                        4,
-                        8,
-                        16,
-                        32,
-                        64
-                    ],
-                    "font_sizes": [
-                        12,
-                        14,
-                        16,
-                        20,
-                        24,
-                        32
-                    ],
-                    "border_radii": [
-                        0,
-                        4,
-                        8,
-                        16
-                    ]
-                },
-                "generate_css_variables": true
-            }
-        },
-        "renderer": {
-            "primary_engine": "webgpu",
-            "fallback_engine": "webgl",
-            "culling_rules": {
-                "strategies": [
-                    "frustum",
-                    "distance"
-                ],
-                "max_render_distance": 500.0,
-                "occlusion_culling_resolution": 256
-            },
-            "enable_shadows": true,
-            "shadow_map_resolution": 2048,
-            "tier_budgets": {},
-            "vfx_complexity": "medium"
-        },
-        "required_components": [],
-        "telemetry": {
-            "fps_threshold": 60.0,
-            "max_memory_mb": 512,
-            "max_compile_time_ms": 1000,
-            "self_heal_enabled": true
-        },
-        "locale": {
-            "target_language": "en",
-            "fluid_ui_rules": {
-                "max_word_length_tolerance": 20,
-                "force_text_wrap": true,
-                "flex_direction_fallback": "column",
-                "scale_font_down_if_overflow": true
-            },
-            "audio_cadence_shift": 0.0,
-            "text_direction": "ltr"
-        },
-        "tutorials": [],
-        "accessibility": {
-            "cognitive_load_level": "balanced",
-            "motor_assist_mode": "generous_timing",
-            "visual_contrast_profile": "high_contrast",
-            "audio_cue_amplification": "high",
-            "camera_comfort_mode": "reduced_motion"
-        }
+    "locale": {
+      "target_language": "en",
+      "fluid_ui_rules": {
+        "max_word_length_tolerance": 20,
+        "force_text_wrap": true,
+        "flex_direction_fallback": "column",
+        "scale_font_down_if_overflow": true
+      },
+      "audio_cadence_shift": 0.0,
+      "text_direction": "ltr"
     },
-    "input_timing_state": {
-        "motor_assist_mode": "generous_timing",
-        "global_window_multiplier": 2.5,
-        "base_action_windows_ms": {
-            "dodge": 200,
-            "parry": 150,
-            "confirm": 300,
-            "interact": 250,
-            "jump": 200
-        },
-        "active_action_windows_ms": {
-            "dodge": 500,
-            "parry": 375,
-            "confirm": 750,
-            "interact": 625,
-            "jump": 500
-        },
-        "formula": "active_window_ms = base_window_ms * motor_assist_multiplier"
-    },
-    "camera_rig_state": {
-        "shake_amplitude": 1.0,
-        "sine_wave_shake_enabled": false,
-        "fov_change_multiplier": 0.25,
-        "interpolation_mode": "snap",
-        "lerp_duration_seconds": 0.0,
-        "snap_to_stable_angles": true,
-        "motion_emotion_priority": false,
-        "lighting_emotion_priority": true,
-        "color_grade_emotion_priority": true,
-        "emotion_preservation_channel": "lighting_and_color",
-        "base_camera_rig_state": {
-            "shake_amplitude": 1.0,
-            "sine_wave_shake_enabled": true,
-            "fov_change_multiplier": 1.0,
-            "interpolation_mode": "smooth_lerp",
-            "lerp_duration_seconds": 0.35,
-            "snap_to_stable_angles": false,
-            "motion_emotion_priority": true,
-            "lighting_emotion_priority": false,
-            "color_grade_emotion_priority": false,
-            "emotion_preservation_channel": "motion"
-        },
-        "camera_comfort_mode": "reduced_motion",
-        "shake_multiplier": 0.0,
-        "active_shake_amplitude": 0.0,
-        "active_fov_change_multiplier": 0.25
-    },
-    "last_accessibility_adaptation": {
-        "timestamp": "2026-07-20T10:22:48Z",
-        "mode_argument": "high_contrast+generous_timing+reduced_motion+audio_high",
-        "applied_tokens": [
-            "high_contrast",
-            "generous_timing",
-            "reduced_motion",
-            "audio_high"
-        ],
-        "accessibility_dna": {
-            "cognitive_load_level": "balanced",
-            "motor_assist_mode": "generous_timing",
-            "visual_contrast_profile": "high_contrast",
-            "audio_cue_amplification": "high",
-            "camera_comfort_mode": "reduced_motion"
-        },
-        "summary": {
-            "ui_color_changes": 3,
-            "input_timing_changes": 5,
-            "audio_changed": true,
-            "camera_field_changes": 0
-        }
-    },
-    "audio_dna": {
-        "accessibility_audio_mode": "high",
-        "critical_frequency_boost_db": 10.0,
-        "danger_cue_amplification_db": 10.0,
-        "critical_frequency_band_hz": [
-            1000,
-            4000
-        ],
-        "critical_cue_filter_hint": "presence_boost"
-    },
-    "day": 31,
-    "last_completed_day": 31,
-    "day_31_status": "complete",
-    "current_task": "Day 31 complete: The Accessibility Hole (Empathetic Adaptation). Next: Day 32.",
-    "completed_days": [
-        30,
-        31
-    ]
+    "accessibility": {
+      "cognitive_load_level": "balanced",
+      "motor_assist_mode": "standard",
+      "visual_contrast_profile": "standard",
+      "audio_cue_amplification": "off",
+      "camera_comfort_mode": "standard"
+    }
+  },
+  "accessibility_dna": {
+    "cognitive_load_level": "balanced",
+    "motor_assist_mode": "standard",
+    "visual_contrast_profile": "standard",
+    "audio_cue_amplification": "off",
+    "camera_comfort_mode": "standard"
+  },
+  "input_dna": [],
+  "input_timing_state": {},
+  "audio_dna": {},
+  "camera_rig_state": {},
+  "telemetry": {},
+  "performance_report": {},
+  "mastery_events": [],
+  "explicit_accessibility_preferences": {},
+  "last_accessibility_adaptation": {},
+  "day_32": {
+    "title": "The Quest Hole: Procedural Narrative Graphs & DAG Validation",
+    "completed_steps": [
+      "Step 1: Pydantic Schemas - QuestDNA and NarrativeNode",
+      "Step 2: DAG Validator - Infinite loop prevention",
+      "Step 3: State-Mutation Resolver - Day 11 World State connection",
+      "Step 4: Supabase narrative_graphs table and RLS",
+      "Step 5: Brain Upgrade - Story Weaver",
+      "Step 6: Frontend Hook - Dynamic Quest Log",
+      "Step 7: CLI Integration - camera quest generate and camera quest progress",
+      "Step 8: Testing skipped by Founder",
+      "Step 9: End of Day Ritual - Git push and state save"
+    ],
+    "files_upgraded": [
+      "packages/core/models.py",
+      "packages/core/narrative_engine.py",
+      "packages/core/brain.py",
+      "apps/web/app.py",
+      "apps/cli/camera_cli.py"
+    ],
+    "files_created": [
+      "apps/web/static/systems/QuestLog.jsx"
+    ],
+    "supabase_tables": [
+      "narrative_graphs"
+    ],
+    "commands": [
+      "camera quest generate --max-nodes 3",
+      "camera quest generate --max-nodes 3 --save",
+      "camera quest progress node_enter_ruins",
+      "camera quest progress node_find_signal --completed node_enter_ruins",
+      "camera quest progress node_open_vault --completed node_enter_ruins,node_find_signal"
+    ],
+    "architectural_truth": "The story is computed, not written."
+  }
 }

@@ -100,6 +100,22 @@ except Exception:
     default_camera_comfort_engine = None
 
 
+# ==========================================
+# DAY 32 SAFE IMPORTS:
+# The Quest Hole / Procedural Narrative Graphs.
+# ==========================================
+try:
+    from packages.core.brain import (
+        generate_quest_dna_report,
+        progress_quest_node
+    )
+    from packages.core.models import QuestDNA
+except Exception:
+    generate_quest_dna_report = None
+    progress_quest_node = None
+    QuestDNA = None
+
+
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
 supabase = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
@@ -465,6 +481,383 @@ def _print_camera_accessibility_report(report):
             table.add_row(str(field_name), str(change), "")
 
     console.print(table)
+
+
+# ==========================================
+# DAY 32: QUEST CLI HELPERS
+# ==========================================
+
+def _quest_jsonable(obj):
+    """
+    Convert Pydantic models, dicts, lists, or primitives into JSON-safe data.
+    """
+    if obj is None:
+        return None
+
+    if hasattr(obj, "model_dump"):
+        try:
+            return obj.model_dump(mode="json")
+        except Exception:
+            return obj.model_dump()
+
+    if isinstance(obj, dict):
+        return obj
+
+    if isinstance(obj, list):
+        return obj
+
+    return str(obj)
+
+
+def _quest_json_block(payload) -> Syntax:
+    text = json.dumps(
+        _quest_jsonable(payload),
+        indent=2,
+        default=str
+    )
+
+    return Syntax(
+        text,
+        "json",
+        theme="monokai",
+        line_numbers=False
+    )
+
+
+def _quest_parse_completed(raw_value: str):
+    """
+    Parse completed node IDs from CLI input.
+
+    Supported:
+    --completed node_1,node_2
+    --completed '["node_1", "node_2"]'
+    """
+    if not raw_value:
+        return []
+
+    raw_value = raw_value.strip()
+
+    if raw_value.startswith("["):
+        try:
+            parsed = json.loads(raw_value)
+
+            if isinstance(parsed, list):
+                return [
+                    str(item).strip()
+                    for item in parsed
+                    if str(item).strip()
+                ]
+
+        except Exception:
+            pass
+
+    return [
+        part.strip()
+        for part in raw_value.split(",")
+        if part.strip()
+    ]
+
+
+def _quest_demo_payload() -> dict:
+    """
+    Deterministic demo QuestDNA.
+
+    This allows the CLI to test the Quest Hole even if Supabase
+    has no active narrative graph yet.
+    """
+    return {
+        "quest_id": "quest_demo_ruins",
+        "nodes": [
+            {
+                "node_id": "node_enter_ruins",
+                "semantic_concept": "player_discovers_the_old_world_ruins",
+                "completion_condition": {
+                    "type": "always"
+                },
+                "state_mutations": {
+                    "ruins_discovered": True
+                }
+            },
+            {
+                "node_id": "node_find_signal",
+                "semantic_concept": "player_finds_a_weak_unknown_signal",
+                "completion_condition": {
+                    "type": "node_completed",
+                    "node_id": "node_enter_ruins"
+                },
+                "state_mutations": {
+                    "signal_found": True,
+                    "heat_level": {"$add": 1}
+                }
+            },
+            {
+                "node_id": "node_open_vault",
+                "semantic_concept": "player_opens_the_hidden_vault_door",
+                "completion_condition": {
+                    "type": "node_completed",
+                    "node_id": "node_find_signal"
+                },
+                "state_mutations": {
+                    "vault_open": True,
+                    "time_of_day": "18:00"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node": "node_enter_ruins",
+                "to_node": "node_find_signal"
+            },
+            {
+                "from_node": "node_find_signal",
+                "to_node": "node_open_vault"
+            }
+        ],
+        "prerequisites": [],
+        "state_mutations": {
+            "quest_demo_ruins_complete": True
+        }
+    }
+
+
+def _quest_load_payload(project_id=None, quest_id=None):
+    """
+    Load QuestDNA from Supabase if possible.
+
+    If no active quest exists, fall back to the deterministic demo quest.
+    """
+    demo = _quest_demo_payload()
+
+    if not project_id:
+        project_id = get_active_project_id()
+
+    if supabase and project_id:
+        try:
+            query = (
+                supabase.table("narrative_graphs")
+                .select("quest_dna")
+                .eq("project_id", project_id)
+                .eq("is_active", True)
+            )
+
+            if quest_id:
+                query = query.eq("quest_id", quest_id)
+
+            response = (
+                query
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                return response.data[0].get("quest_dna")
+
+            if quest_id:
+                return None
+
+        except Exception as e:
+            console.print(
+                f"[yellow]Warning: Could not load quest from Supabase: {e}[/yellow]"
+            )
+
+    if quest_id:
+        if quest_id == demo.get("quest_id"):
+            return demo
+
+        return None
+
+    return demo
+
+
+def _quest_save_to_supabase(project_id, quest_json: dict):
+    """
+    Save active QuestDNA into Supabase narrative_graphs.
+
+    This deactivates older active quests for the same project,
+    then upserts the new quest graph.
+    """
+    if not supabase:
+        return False, "Supabase is not connected."
+
+    if not project_id:
+        project_id = get_active_project_id()
+
+    if not project_id:
+        return False, "No project_id available. Cannot save QuestDNA."
+
+    owner_id = None
+
+    try:
+        project_response = (
+            supabase.table("projects")
+            .select("owner_id")
+            .eq("id", project_id)
+            .limit(1)
+            .execute()
+        )
+
+        if project_response.data and len(project_response.data) > 0:
+            owner_id = project_response.data[0].get("owner_id")
+
+    except Exception:
+        owner_id = None
+
+    payload = {
+        "project_id": project_id,
+        "quest_id": quest_json.get("quest_id"),
+        "quest_dna": quest_json,
+        "is_active": True,
+        "owner_id": owner_id or "00000000-0000-0000-0000-000000000000",
+        "unlocked_player_ids": []
+    }
+
+    try:
+        # Deactivate older active quest graphs for this project.
+        try:
+            (
+                supabase.table("narrative_graphs")
+                .update({"is_active": False})
+                .eq("project_id", project_id)
+                .execute()
+            )
+        except Exception:
+            pass
+
+        # Insert or update this QuestDNA.
+        (
+            supabase.table("narrative_graphs")
+            .upsert(
+                payload,
+                on_conflict="project_id,quest_id"
+            )
+            .execute()
+        )
+
+        return True, f"Quest '{payload['quest_id']}' saved to Supabase."
+
+    except Exception as e:
+        return False, f"Could not save QuestDNA: {e}"
+
+
+def _quest_print_generation_report(report: dict):
+    quest_json = report.get("quest_json") or {}
+    validation = report.get("validation") or {}
+
+    console.print(
+        Panel(
+            f"[green]Story Weaver generated QuestDNA[/green]\n"
+            f"Quest ID: [cyan]{quest_json.get('quest_id')}[/cyan]\n"
+            f"Attempts: [cyan]{report.get('attempts', 0)}[/cyan]\n"
+            f"Valid DAG: [cyan]{validation.get('is_valid', False)}[/cyan]",
+            title="Day 32: Quest Generation",
+            border_style="cyan"
+        )
+    )
+
+    node_table = Table(title="Narrative Nodes")
+    node_table.add_column("Node ID", style="cyan")
+    node_table.add_column("Semantic Concept", style="white")
+    node_table.add_column("Completion Condition", style="magenta")
+    node_table.add_column("State Mutations", style="yellow")
+
+    for node in quest_json.get("nodes", []):
+        node_table.add_row(
+            str(node.get("node_id", "")),
+            str(node.get("semantic_concept", "")),
+            json.dumps(node.get("completion_condition", {}), default=str),
+            json.dumps(node.get("state_mutations", {}), default=str)
+        )
+
+    console.print(node_table)
+
+    edge_table = Table(title="Directed Edges")
+    edge_table.add_column("From Node", style="cyan")
+    edge_table.add_column("", style="white")
+    edge_table.add_column("To Node", style="cyan")
+
+    for edge in quest_json.get("edges", []):
+        edge_table.add_row(
+            str(edge.get("from_node", "")),
+            "→",
+            str(edge.get("to_node", ""))
+        )
+
+    console.print(edge_table)
+
+    if validation.get("topological_order"):
+        console.print(
+            Panel(
+                " → ".join(validation["topological_order"]),
+                title="Topological Order",
+                border_style="green"
+            )
+        )
+
+
+def _quest_print_progress_result(result: dict):
+    if result.get("success"):
+        console.print(
+            Panel(
+                f"[green]Node completed successfully.[/green]\n"
+                f"Quest ID: [cyan]{result.get('quest_id')}[/cyan]\n"
+                f"Node ID: [cyan]{result.get('node_id')}[/cyan]\n"
+                f"Semantic Concept: [white]{result.get('semantic_concept', '')}[/white]",
+                title="Day 32: Quest Progress",
+                border_style="green"
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"[red]Node completion failed.[/red]\n"
+                f"Quest ID: [cyan]{result.get('quest_id')}[/cyan]\n"
+                f"Node ID: [cyan]{result.get('node_id')}[/cyan]",
+                title="Day 32: Quest Progress",
+                border_style="red"
+            )
+        )
+
+    meta_table = Table(title="Progress State")
+    meta_table.add_column("Field", style="cyan")
+    meta_table.add_column("Value", style="white")
+
+    meta_table.add_row(
+        "Completed Nodes",
+        ", ".join(result.get("completed_node_ids", [])) or "None"
+    )
+
+    meta_table.add_row(
+        "Active Nodes",
+        ", ".join(result.get("active_node_ids", [])) or "None"
+    )
+
+    mutation_report = result.get("mutation_report") or {}
+
+    meta_table.add_row(
+        "Mutation Engine",
+        str(mutation_report.get("engine", "none"))
+    )
+
+    console.print(meta_table)
+
+    console.print("\n[yellow]Applied Mutations:[/yellow]")
+    console.print(
+        _quest_json_block(result.get("applied_mutations", {}))
+    )
+
+    console.print("\n[yellow]Updated World State:[/yellow]")
+    console.print(
+        _quest_json_block(result.get("world_state", {}))
+    )
+
+    errors = result.get("errors", [])
+
+    if errors:
+        console.print("\n[red]Errors:[/red]")
+
+        for error in errors:
+            console.print(f"[red]- {error}[/red]")
 
 
 # ==========================================
@@ -1799,6 +2192,199 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
     )
 
 
+# ==========================================
+# DAY 32: THE QUEST HOLE (NARRATIVE GRAPHS)
+# ==========================================
+@cli.group()
+def quest():
+    """Day 32: Procedural Narrative Graph Commands."""
+    pass
+
+
+@quest.command(name="generate")
+@click.option(
+    "--intent",
+    default=None,
+    help="Optional creative intent for the quest."
+)
+@click.option(
+    "--max-nodes",
+    default=3,
+    show_default=True,
+    help="Maximum number of narrative nodes to generate."
+)
+@click.option(
+    "--project-id",
+    default=None,
+    help="Optional Supabase project UUID."
+)
+@click.option(
+    "--save",
+    is_flag=True,
+    default=False,
+    help="Save the generated QuestDNA into Supabase narrative_graphs."
+)
+def quest_generate(intent, max_nodes, project_id, save):
+    """
+    Generate a new QuestDNA using the Story Weaver.
+
+    Examples:
+    camera quest generate
+    camera quest generate --intent "A quiet investigation before the storm"
+    camera quest generate --save
+    """
+    if generate_quest_dna_report is None:
+        console.print(
+            "[bold red]Day 32 Story Weaver is not available. "
+            "Check packages/core/brain.py.[/bold red]"
+        )
+        return
+
+    if not project_id:
+        project_id = get_active_project_id()
+
+    console.print(
+        Panel(
+            "[cyan]Story Weaver is generating procedural QuestDNA...[/cyan]\n"
+            f"Intent: [white]{intent or 'Emergent from World Truths'}[/white]\n"
+            f"Max Nodes: [white]{max_nodes}[/white]\n"
+            f"Project ID: [white]{project_id or 'local/demo'}[/white]",
+            title="Day 32: Story Weaver",
+            border_style="cyan"
+        )
+    )
+
+    report = generate_quest_dna_report(
+        quest_intent=intent,
+        max_nodes=max_nodes,
+        project_id=project_id
+    )
+
+    if not report.get("success"):
+        errors = report.get("errors", [])
+
+        for error in errors:
+            console.print(f"[red]- {error}[/red]")
+
+        console.print("[bold red]QuestDNA generation failed.[/bold red]")
+        return
+
+    _quest_print_generation_report(report)
+
+    if save:
+        ok, message = _quest_save_to_supabase(
+            project_id=project_id,
+            quest_json=report.get("quest_json", {})
+        )
+
+        if ok:
+            console.print(f"[bold green]{message}[/bold green]")
+        else:
+            console.print(f"[bold red]{message}[/bold red]")
+
+
+@quest.command(name="progress")
+@click.argument("node_id")
+@click.option(
+    "--quest-id",
+    default=None,
+    help="Optional quest_id. If omitted, uses latest active quest or demo quest."
+)
+@click.option(
+    "--project-id",
+    default=None,
+    help="Optional Supabase project UUID."
+)
+@click.option(
+    "--completed",
+    default="",
+    help="Comma-separated completed node IDs. Example: node_enter_ruins,node_find_signal"
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Force completion even if unlock condition is not met."
+)
+def quest_progress(node_id, quest_id, project_id, completed, force):
+    """
+    Simulate completing one narrative node.
+
+    Examples:
+    camera quest progress node_enter_ruins
+    camera quest progress node_find_signal --completed node_enter_ruins
+    camera quest progress node_open_vault --completed node_enter_ruins,node_find_signal
+    """
+    if progress_quest_node is None:
+        console.print(
+            "[bold red]Day 32 Quest progression is not available. "
+            "Check packages/core/brain.py.[/bold red]"
+        )
+        return
+
+    if QuestDNA is None:
+        console.print(
+            "[bold red]QuestDNA model is not available. "
+            "Check packages/core/models.py.[/bold red]"
+        )
+        return
+
+    if not project_id:
+        project_id = get_active_project_id()
+
+    completed_node_ids = _quest_parse_completed(completed)
+
+    quest_payload = _quest_load_payload(
+        project_id=project_id,
+        quest_id=quest_id
+    )
+
+    if not quest_payload:
+        console.print(
+            "[bold red]No QuestDNA found. Generate one first with:[/bold red]\n"
+            "[cyan]camera quest generate --save[/cyan]"
+        )
+        return
+
+    try:
+        quest = QuestDNA(**quest_payload)
+    except Exception as e:
+        console.print(f"[bold red]QuestDNA validation failed: {e}[/bold red]")
+        return
+
+    console.print(
+        Panel(
+            "[cyan]Simulating narrative node completion...[/cyan]\n"
+            f"Quest ID: [white]{quest.quest_id}[/white]\n"
+            f"Node ID: [white]{node_id}[/white]\n"
+            f"Force Mode: [white]{force}[/white]\n"
+            f"Project ID: [white]{project_id or 'local/demo'}[/white]",
+            title="Day 32: Quest Progress",
+            border_style="cyan"
+        )
+    )
+
+    result = progress_quest_node(
+        quest=quest,
+        node_id=node_id,
+        project_id=project_id,
+        completed_node_ids=completed_node_ids,
+        force=force
+    )
+
+    _quest_print_progress_result(result)
+
+    if result.get("success"):
+        console.print(
+            "\n[bold green]✅ The story physically changed the World State.[/bold green]\n"
+            "[bold cyan]Pure mathematical narrative. Zero hardcoded scripts.[/bold cyan]\n"
+        )
+    else:
+        console.print(
+            "\n[bold red]❌ Node completion failed. Read the report above.[/bold red]\n"
+        )
+
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -1813,6 +2399,7 @@ cli.add_command(economy) # Day 28 Addition
 cli.add_command(tutorial) # Day 29 Addition
 cli.add_command(chrono) # Day 30 Addition
 cli.add_command(accessibility) # Day 31 Addition
+cli.add_command(quest) # Day 32 Addition
 
 # ==========================================
 # 3. START THE ENGINE

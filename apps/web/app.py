@@ -58,6 +58,17 @@ except ImportError as e:
     modding_engine = None
     print(f"WARNING: Modding system import failed: {e}")
 
+# ==========================================
+# DAY 32 IMPORTS: The Quest Hole / Narrative Graphs
+# ==========================================
+try:
+    from packages.core.models import QuestDNA
+    from packages.core.narrative_engine import NarrativeEngine
+except ImportError as e:
+    QuestDNA = None
+    NarrativeEngine = None
+    print(f"WARNING: Day 32 Narrative Graph system import failed: {e}")
+
 # --- 0. LOAD THE .ENV FILE ---
 load_dotenv()
 
@@ -106,6 +117,180 @@ def save_to_blackbox(report_data: dict):
         logger.info("📦 Black Box: Telemetry report saved successfully.")
     except Exception as e:
         logger.error(f"Black Box write failed: {e}")
+
+# ==========================================
+# DAY 32: QUEST LOG HELPERS
+# ==========================================
+def _quest_log_latest_project_id():
+    """
+    Safely fetch the latest project ID.
+
+    Priority:
+    1. Use brain.get_latest_project_id() if available.
+    2. Fall back to direct Supabase query.
+    """
+    if brain and hasattr(brain, "get_latest_project_id"):
+        try:
+            return brain.get_latest_project_id()
+        except Exception as e:
+            logger.error(f"Quest Log could not use brain.get_latest_project_id: {e}")
+
+    if not supabase:
+        return None
+
+    try:
+        response = (
+            supabase.table("projects")
+            .select("id")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if response.data and len(response.data) > 0:
+            return response.data[0].get("id")
+
+    except Exception as e:
+        logger.error(f"Quest Log could not fetch latest project ID: {e}")
+
+    return None
+
+
+def _quest_log_default_tokens():
+    """
+    Day 10 Atomic Token Synthesizer fallback.
+
+    These tokens are pure visual DNA.
+    The React Quest Log reads these tokens and compiles reality.
+    """
+    return {
+        "accent_primary": "#3B82F6",
+        "accent_active": "#38BDF8",
+        "accent_completed": "#22C55E",
+        "accent_locked": "#64748B",
+        "background_color": "#0F172A",
+        "surface_color": "#111827",
+        "text_color": "#E2E8F0",
+        "muted_text_color": "#94A3B8",
+        "spacing_unit": 8,
+        "radius": 12,
+        "border_width": 1,
+        "motion_entrance": "fade-in-up"
+    }
+
+
+def _quest_log_demo_dna():
+    """
+    Safe demo QuestDNA.
+
+    This is used only when no active Supabase quest graph exists yet.
+    It allows the Quest Log UI to render deterministically.
+    """
+    return {
+        "quest_id": "quest_demo_ruins",
+        "nodes": [
+            {
+                "node_id": "node_enter_ruins",
+                "semantic_concept": "player_discovers_the_old_world_ruins",
+                "completion_condition": {
+                    "type": "always"
+                },
+                "state_mutations": {
+                    "ruins_discovered": True
+                }
+            },
+            {
+                "node_id": "node_find_signal",
+                "semantic_concept": "player_finds_a_weak_unknown_signal",
+                "completion_condition": {
+                    "type": "node_completed",
+                    "node_id": "node_enter_ruins"
+                },
+                "state_mutations": {
+                    "signal_found": True,
+                    "heat_level": {"$add": 1}
+                }
+            },
+            {
+                "node_id": "node_open_vault",
+                "semantic_concept": "player_opens_the_hidden_vault_door",
+                "completion_condition": {
+                    "type": "node_completed",
+                    "node_id": "node_find_signal"
+                },
+                "state_mutations": {
+                    "vault_open": True,
+                    "time_of_day": "18:00"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node": "node_enter_ruins",
+                "to_node": "node_find_signal"
+            },
+            {
+                "from_node": "node_find_signal",
+                "to_node": "node_open_vault"
+            }
+        ],
+        "prerequisites": [],
+        "state_mutations": {
+            "quest_demo_ruins_complete": True
+        }
+    }
+
+
+def _quest_log_node_state_mutations(node):
+    """
+    Safely read node-level state_mutations.
+
+    NarrativeNode allows extra fields, so state_mutations may exist
+    inside model_extra until we formally type it later.
+    """
+    mutations = getattr(node, "state_mutations", None)
+
+    if mutations is None:
+        extra = getattr(node, "model_extra", {}) or {}
+        mutations = extra.get("state_mutations", {})
+
+    if mutations is None:
+        return {}
+
+    if isinstance(mutations, dict):
+        return mutations
+
+    return {}
+
+
+def _quest_log_parse_completed_node_ids(raw_value: str):
+    """
+    Parse completed node IDs from the query string.
+
+    Supported formats:
+    - ?completed=node_1,node_2
+    - ?completed=["node_1","node_2"]
+    """
+    if not raw_value:
+        return []
+
+    raw_value = raw_value.strip()
+
+    if raw_value.startswith("["):
+        try:
+            parsed = json.loads(raw_value)
+
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+
+        except Exception:
+            pass
+
+    return [
+        part.strip()
+        for part in raw_value.split(",")
+        if part.strip()
+    ]
 
 # ==========================================
 # 3. MAIN WEB PAGE ROUTE
@@ -377,6 +562,165 @@ def install_mod():
         error_msg = str(e)
         logger.error(f"❌ CRITICAL INJECTION ERROR: {error_msg}")
         return jsonify({"success": False, "message": f"Critical error: {error_msg}"}), 500
+
+# ==========================================
+# DAY 32: THE DYNAMIC QUEST LOG API
+# ==========================================
+@app.route('/api/quest-log', methods=['GET'])
+def get_quest_log():
+    """
+    Dynamic Quest Log API.
+
+    Query params:
+    - project_id: optional project UUID
+    - completed: optional comma-separated completed node IDs
+
+    Examples:
+    /api/quest-log
+    /api/quest-log?completed=node_enter_ruins
+    /api/quest-log?project_id=UUID&completed=node_enter_ruins,node_find_signal
+    """
+    if not QuestDNA or not NarrativeEngine:
+        return jsonify({
+            "success": False,
+            "errors": ["Day 32 Narrative Graph system not available."],
+            "quest_id": None,
+            "nodes": [],
+            "edges": [],
+            "active_node_ids": [],
+            "completed_node_ids": [],
+            "tokens": _quest_log_default_tokens()
+        }), 500
+
+    project_id = request.args.get("project_id") or _quest_log_latest_project_id()
+    completed_raw = request.args.get("completed", "")
+    completed_node_ids = _quest_log_parse_completed_node_ids(completed_raw)
+
+    quest_payload = None
+
+    # --------------------------------------------------
+    # 1. Try to read the active QuestDNA from Supabase.
+    # --------------------------------------------------
+    if supabase and project_id:
+        try:
+            response = (
+                supabase.table("narrative_graphs")
+                .select("quest_dna")
+                .eq("project_id", project_id)
+                .eq("is_active", True)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+
+            if response.data and len(response.data) > 0:
+                quest_payload = response.data[0].get("quest_dna")
+
+        except Exception as e:
+            logger.error(f"Quest Log API could not read narrative_graphs: {e}")
+
+    # --------------------------------------------------
+    # 2. Fallback to deterministic demo QuestDNA.
+    # --------------------------------------------------
+    if not quest_payload:
+        quest_payload = _quest_log_demo_dna()
+
+    # --------------------------------------------------
+    # 3. Validate QuestDNA through Pydantic.
+    # --------------------------------------------------
+    try:
+        quest = QuestDNA(**quest_payload)
+    except Exception as e:
+        logger.error(f"QuestDNA validation failed: {e}")
+
+        return jsonify({
+            "success": False,
+            "errors": [f"QuestDNA validation failed: {e}"],
+            "quest_id": None,
+            "nodes": [],
+            "edges": [],
+            "active_node_ids": [],
+            "completed_node_ids": completed_node_ids,
+            "tokens": _quest_log_default_tokens()
+        }), 400
+
+    # --------------------------------------------------
+    # 4. Validate DAG and compute active nodes.
+    # --------------------------------------------------
+    try:
+        engine = NarrativeEngine()
+        validation = engine.validate_quest_dna(quest)
+
+        if not validation["is_valid"]:
+            return jsonify({
+                "success": False,
+                "errors": validation["errors"],
+                "quest_id": quest.quest_id,
+                "nodes": [],
+                "edges": [],
+                "active_node_ids": [],
+                "completed_node_ids": completed_node_ids,
+                "tokens": _quest_log_default_tokens(),
+                "validation": validation
+            }), 400
+
+        active_node_ids = engine.get_active_node_ids(
+            quest=quest,
+            completed_node_ids=completed_node_ids
+        )
+
+    except Exception as e:
+        logger.error(f"Narrative Engine failed: {e}")
+
+        return jsonify({
+            "success": False,
+            "errors": [f"Narrative Engine failed: {e}"],
+            "quest_id": quest.quest_id,
+            "nodes": [],
+            "edges": [],
+            "active_node_ids": [],
+            "completed_node_ids": completed_node_ids,
+            "tokens": _quest_log_default_tokens()
+        }), 500
+
+    # --------------------------------------------------
+    # 5. Serialize UI-safe quest nodes.
+    # --------------------------------------------------
+    ui_nodes = []
+
+    for node in quest.nodes:
+        is_completed = node.node_id in completed_node_ids
+        is_active = node.node_id in active_node_ids
+        is_locked = (not is_completed) and (not is_active)
+
+        ui_nodes.append({
+            "node_id": node.node_id,
+            "semantic_concept": node.semantic_concept,
+            "completion_condition": node.completion_condition,
+            "state_mutations": _quest_log_node_state_mutations(node),
+            "is_completed": is_completed,
+            "is_active": is_active,
+            "is_locked": is_locked
+        })
+
+    ui_edges = [
+        {
+            "from_node": edge.from_node,
+            "to_node": edge.to_node
+        }
+        for edge in quest.edges
+    ]
+
+    return jsonify({
+        "success": True,
+        "quest_id": quest.quest_id,
+        "nodes": ui_nodes,
+        "edges": ui_edges,
+        "active_node_ids": active_node_ids,
+        "completed_node_ids": completed_node_ids,
+        "tokens": _quest_log_default_tokens(),
+        "validation": validation
+    })
 
 # ==========================================
 # RUN THE SERVER

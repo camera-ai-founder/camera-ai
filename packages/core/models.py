@@ -1,3 +1,5 @@
+# packages/core/models.py
+
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Literal, Union, Any
 from enum import Enum
@@ -405,6 +407,117 @@ class AdaptationEvent(BaseModel):
     )
 
 # ==========================================================
+# DAY 32: THE QUEST HOLE (PROCEDURAL NARRATIVE GRAPHS)
+# ==========================================================
+# This is the Procedural Narrative Graph DNA.
+#
+# We NEVER hardcode branching dialogue trees or quest scripts.
+# The Brain outputs QuestDNA.
+# The Narrative Engine reads this DNA as a mathematical graph:
+#   - NarrativeNode = a story beat / semantic concept
+#   - NarrativeEdge = a one-way logical connection
+#   - QuestDNA = the full graph plus world mutations
+#
+# The story is computed, not written.
+# ==========================================================
+
+class NarrativeNode(BaseModel):
+    """
+    A single story beat inside the narrative graph.
+
+    Example:
+    {
+        "node_id": "node_enter_ruins",
+        "semantic_concept": "player_discovers_the_old_world_ruins",
+        "completion_condition": {
+            "type": "world_state_flag",
+            "key": "ruins_discovered",
+            "value": true
+        }
+    }
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    node_id: str = Field(
+        ...,
+        description="Unique ID for this story node."
+    )
+
+    semantic_concept: str = Field(
+        ...,
+        description="The semantic meaning of this story beat. Never raw dialogue. Only concept."
+    )
+
+    completion_condition: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Deterministic condition that must be satisfied to complete this node."
+    )
+
+
+class NarrativeEdge(BaseModel):
+    """
+    A directed connection between two narrative nodes.
+
+    Example:
+    {
+        "from_node": "node_enter_ruins",
+        "to_node": "node_find_signal"
+    }
+
+    This means:
+    node_find_signal can only become active after node_enter_ruins is complete.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    from_node: str = Field(
+        ...,
+        description="The source node ID. This node must happen first."
+    )
+
+    to_node: str = Field(
+        ...,
+        description="The target node ID. This node unlocks after the source node completes."
+    )
+
+
+class QuestDNA(BaseModel):
+    """
+    The full procedural quest graph.
+
+    This is not a script.
+    This is a directed graph of semantic story nodes.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    quest_id: str = Field(
+        ...,
+        description="Unique ID for this quest."
+    )
+
+    nodes: List[NarrativeNode] = Field(
+        default_factory=list,
+        description="All narrative nodes inside this quest graph."
+    )
+
+    edges: List[NarrativeEdge] = Field(
+        default_factory=list,
+        description="Directed edges between nodes. Must form a Directed Acyclic Graph."
+    )
+
+    prerequisites: List[str] = Field(
+        default_factory=list,
+        description="Quest-level prerequisites that must be true before this quest can become active."
+    )
+
+    state_mutations: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Deterministic World State mutations triggered by this quest."
+    )
+
+# ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
 # ==========================================================
 class OntologicalNode(BaseModel):
@@ -465,6 +578,10 @@ class AppDNA(BaseModel):
     # DAY 31: The Accessibility Hole.
     # Empathy is now part of the master DNA.
     accessibility: AccessibilityDNA = Field(default_factory=AccessibilityDNA)
+
+    # DAY 32: The Quest Hole.
+    # Procedural narrative graphs are now part of the master DNA.
+    quests: List[QuestDNA] = Field(default_factory=list)
 
 # ==========================================================
 # DAY 12, 15, 16, 17, 18, 20, 21 & 22 RESTORATION
