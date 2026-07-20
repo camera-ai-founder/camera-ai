@@ -302,6 +302,109 @@ class MasteryEvent(BaseModel):
     success_timestamp: datetime = Field(default_factory=datetime.utcnow, description="The exact time the player succeeded.")
 
 # ==========================================================
+# DAY 31: THE ACCESSIBILITY HOLE (EMPATHETIC ADAPTATION)
+# ==========================================================
+# This is the Cognitive & Motor Adaptation Engine DNA.
+#
+# We NEVER hardcode accessibility settings.
+# The Brain outputs AccessibilityDNA.
+# Every engine reads this DNA and mathematically adapts reality:
+#   - UI spacing and contrast
+#   - input timing windows
+#   - audio cue amplification
+#   - camera motion comfort
+#   - tutorial pacing
+#
+# Accessibility becomes pure, reactive, deterministic data.
+# ==========================================================
+
+class AccessibilityDNA(BaseModel):
+    """
+    The Empathy DNA.
+
+    This describes the player's current comfort needs without touching
+    raw CSS, raw input code, raw audio code, or raw camera code.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    cognitive_load_level: Literal[
+        "minimal",
+        "balanced",
+        "supported",
+        "max_support"
+    ] = Field(
+        default="balanced",
+        description="How much mental load the experience should place on the player."
+    )
+
+    motor_assist_mode: Literal[
+        "standard",
+        "generous_timing",
+        "max_assist"
+    ] = Field(
+        default="standard",
+        description="How generous input timing windows should be for motor comfort."
+    )
+
+    visual_contrast_profile: Literal[
+        "standard",
+        "high_contrast"
+    ] = Field(
+        default="standard",
+        description="The visual contrast reality the UI Token Synthesizer should compile."
+    )
+
+    audio_cue_amplification: Literal[
+        "off",
+        "low",
+        "medium",
+        "high"
+    ] = Field(
+        default="off",
+        description="How strongly critical audio cues should be amplified."
+    )
+
+    camera_comfort_mode: Literal[
+        "standard",
+        "reduced_motion",
+        "stable_only"
+    ] = Field(
+        default="standard",
+        description="How the camera should move to prevent motion sickness while preserving emotional intent."
+    )
+
+
+class AdaptationEvent(BaseModel):
+    """
+    A deterministic record that a system adapted to the player's needs.
+
+    Example:
+    {
+        "trigger_type": "cognitive_load_threshold",
+        "adapted_system": "tutorial_engine",
+        "timestamp": "2026-07-19T00:00:00"
+    }
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    trigger_type: str = Field(
+        ...,
+        description="Why the adaptation happened, e.g., 'cognitive_load_threshold', 'manual_preference', 'telemetry_struggle'."
+    )
+
+    adapted_system: str = Field(
+        ...,
+        description="The system that changed, e.g., 'input_engine', 'ui_token_synthesizer', 'camera_cinematographer'."
+    )
+
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="The exact time the adaptation occurred."
+    )
+
+# ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
 # ==========================================================
 class OntologicalNode(BaseModel):
@@ -358,6 +461,10 @@ class AppDNA(BaseModel):
     
     locale: LocaleDNA = Field(default_factory=LocaleDNA)
     tutorials: List[TutorialDNA] = Field(default_factory=list)
+
+    # DAY 31: The Accessibility Hole.
+    # Empathy is now part of the master DNA.
+    accessibility: AccessibilityDNA = Field(default_factory=AccessibilityDNA)
 
 # ==========================================================
 # DAY 12, 15, 16, 17, 18, 20, 21 & 22 RESTORATION

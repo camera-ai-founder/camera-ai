@@ -1,13 +1,13 @@
 # packages/core/brain.py
 import os
 import json
-from typing import List
+from typing import List, Optional, Dict, Any, Union
 from dotenv import load_dotenv
 from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# 1. DAY 11 to 30 IMPORTS: The Blueprints
+# 1. DAY 11 to 31 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState, JuiceProfile, AppDNA, AppComponent, DesignTokens,
@@ -24,8 +24,24 @@ from .models import (
     TutorialDNA, # ADDED FOR DAY 29
     MasteryEvent, # ADDED FOR DAY 29
     ChronoDNA, # ADDED FOR DAY 30
-    RewindIntent # ADDED FOR DAY 30
+    RewindIntent, # ADDED FOR DAY 30
+    AccessibilityDNA, # ADDED FOR DAY 31
+    AdaptationEvent, # ADDED FOR DAY 31
+    TelemetryDNA, # ADDED FOR DAY 31 EMPATHY DIRECTOR
+    PerformanceReport # ADDED FOR DAY 31 EMPATHY DIRECTOR
 )
+
+# ==========================================
+# DAY 31 OPTIONAL IMPORT:
+# The Cognitive Load Evaluator helps the Empathy Director.
+# ==========================================
+try:
+    from .accessibility_engine import default_accessibility_engine
+except ImportError:
+    try:
+        from packages.core.accessibility_engine import default_accessibility_engine
+    except ImportError:
+        default_accessibility_engine = None
 
 # ==========================================
 # DAY 22 STEP 5: THE SECURITY GUARDRAILS
@@ -1233,3 +1249,433 @@ def act_as_time_director(world_state: WorldState) -> dict:
             "max_rewind_depth_seconds": 60.0,
             "reasoning": "Safe Fallback"
         }
+
+
+# ==========================================
+# 22. DAY 31: THE EMPATHY DIRECTOR (ACCESSIBILITY HOLE)
+# ==========================================
+# The Empathy Director reads:
+# - current AccessibilityDNA
+# - TelemetryDNA / PerformanceReport
+# - MasteryEvents
+# - explicit player preferences
+#
+# Then it outputs pure AccessibilityDNA JSON.
+#
+# It NEVER outputs:
+# - raw CSS
+# - raw HTML
+# - raw code
+# - hardcoded timings
+# - raw camera values
+# - raw audio code
+#
+# Accessibility remains pure, reactive DNA.
+# ==========================================
+
+ACCESSIBILITY_ALLOWED_VALUES: Dict[str, List[str]] = {
+    "cognitive_load_level": [
+        "minimal",
+        "balanced",
+        "supported",
+        "max_support"
+    ],
+    "motor_assist_mode": [
+        "standard",
+        "generous_timing",
+        "max_assist"
+    ],
+    "visual_contrast_profile": [
+        "standard",
+        "high_contrast"
+    ],
+    "audio_cue_amplification": [
+        "off",
+        "low",
+        "medium",
+        "high"
+    ],
+    "camera_comfort_mode": [
+        "standard",
+        "reduced_motion",
+        "stable_only"
+    ],
+}
+
+
+def _get_field(source: Any, key: str, default: Any = None) -> Any:
+    """
+    Safely read a field from a dict, Pydantic model, or object.
+    """
+    if source is None:
+        return default
+
+    if isinstance(source, dict):
+        return source.get(key, default)
+
+    value = getattr(source, key, None)
+    if value is not None:
+        return value
+
+    model_extra = getattr(source, "model_extra", None)
+    if isinstance(model_extra, dict):
+        return model_extra.get(key, default)
+
+    return default
+
+
+def _first_present(*values: Any) -> Any:
+    """
+    Return the first value that is not None.
+    """
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _coerce_accessibility_base(
+    accessibility: Optional[Union[AccessibilityDNA, Dict[str, Any]]]
+) -> AccessibilityDNA:
+    """
+    Safely convert incoming accessibility data into AccessibilityDNA.
+    """
+    if accessibility is None:
+        return AccessibilityDNA()
+
+    if isinstance(accessibility, AccessibilityDNA):
+        if hasattr(accessibility, "model_copy"):
+            return accessibility.model_copy(deep=True)
+        if hasattr(accessibility, "copy"):
+            return accessibility.copy(deep=True)
+        return AccessibilityDNA(**accessibility.model_dump())
+
+    if isinstance(accessibility, dict):
+        try:
+            return AccessibilityDNA(**accessibility)
+        except Exception:
+            return AccessibilityDNA()
+
+    return AccessibilityDNA()
+
+
+def _merge_explicit_accessibility(
+    base: AccessibilityDNA,
+    explicit_preferences: Optional[Dict[str, Any]]
+) -> AccessibilityDNA:
+    """
+    Explicit player preferences always win over automatic adaptation,
+    but only if the values are valid AccessibilityDNA values.
+    """
+    if not explicit_preferences or not isinstance(explicit_preferences, dict):
+        return base
+
+    merged = base.model_dump()
+
+    for key, allowed_values in ACCESSIBILITY_ALLOWED_VALUES.items():
+        if key in explicit_preferences:
+            candidate = explicit_preferences[key]
+
+            if candidate in allowed_values:
+                merged[key] = candidate
+
+    try:
+        return AccessibilityDNA(**merged)
+    except Exception:
+        return base
+
+
+def _summarize_telemetry_for_empathy(
+    telemetry: Optional[Union[TelemetryDNA, Dict[str, Any]]] = None,
+    performance_report: Optional[Union[PerformanceReport, Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Build a small, safe telemetry summary for the Empathy Director.
+    """
+    frame_drops = _first_present(
+        _get_field(telemetry, "frame_drops"),
+        _get_field(telemetry, "dropped_frames"),
+        _get_field(performance_report, "dropped_frames"),
+        _get_field(performance_report, "frame_drops"),
+        0
+    )
+
+    input_hesitation_ms = _first_present(
+        _get_field(telemetry, "input_hesitation_ms"),
+        _get_field(telemetry, "input_hesitation"),
+        _get_field(performance_report, "input_hesitation_ms"),
+        0
+    )
+
+    failed_tutorial_attempts = _first_present(
+        _get_field(telemetry, "failed_tutorial_attempts"),
+        _get_field(telemetry, "tutorial_failures"),
+        _get_field(telemetry, "failed_tutorials"),
+        0
+    )
+
+    current_fps = _first_present(
+        _get_field(performance_report, "current_fps"),
+        _get_field(telemetry, "current_fps"),
+        _get_field(telemetry, "average_fps"),
+        60.0
+    )
+
+    memory_usage_mb = _first_present(
+        _get_field(performance_report, "memory_usage_mb"),
+        _get_field(telemetry, "memory_usage_mb"),
+        0.0
+    )
+
+    bottleneck_component = _first_present(
+        _get_field(performance_report, "bottleneck_component"),
+        _get_field(telemetry, "bottleneck_component"),
+        "none"
+    )
+
+    return {
+        "frame_drops": frame_drops,
+        "input_hesitation_ms": input_hesitation_ms,
+        "failed_tutorial_attempts": failed_tutorial_attempts,
+        "current_fps": current_fps,
+        "memory_usage_mb": memory_usage_mb,
+        "bottleneck_component": bottleneck_component,
+    }
+
+
+def _summarize_mastery_for_empathy(
+    mastery_events: Optional[List[Union[MasteryEvent, Dict[str, Any]]]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build a small, safe mastery summary for the Empathy Director.
+    Only the most recent 5 mastery events are used.
+    """
+    if not mastery_events or not isinstance(mastery_events, list):
+        return []
+
+    summary: List[Dict[str, Any]] = []
+
+    for event in mastery_events[-5:]:
+        if isinstance(event, MasteryEvent):
+            data = event.model_dump()
+        elif isinstance(event, dict):
+            data = event
+        else:
+            data = {"raw": str(event)}
+
+        summary.append({
+            "concept_id": data.get("concept_id", "unknown"),
+            "success_timestamp": data.get("success_timestamp", ""),
+        })
+
+    return summary
+
+
+def act_as_empathy_director(
+    current_accessibility: Optional[Union[AccessibilityDNA, Dict[str, Any]]] = None,
+    telemetry: Optional[Union[TelemetryDNA, Dict[str, Any]]] = None,
+    performance_report: Optional[Union[PerformanceReport, Dict[str, Any]]] = None,
+    mastery_events: Optional[List[Union[MasteryEvent, Dict[str, Any]]]] = None,
+    explicit_preferences: Optional[Dict[str, Any]] = None,
+    player_context: str = ""
+) -> AccessibilityDNA:
+    """
+    DAY 31: THE EMPATHY DIRECTOR.
+
+    The Brain acts as a protective, compassionate director.
+    It outputs AccessibilityDNA only.
+
+    It never writes raw CSS.
+    It never writes raw timings.
+    It never writes raw camera code.
+    It never writes raw audio code.
+    """
+    base_accessibility = _coerce_accessibility_base(current_accessibility)
+    base_accessibility = _merge_explicit_accessibility(base_accessibility, explicit_preferences)
+
+    if not client:
+        print("Error: Groq client is not initialized. Using safe AccessibilityDNA failsafe.")
+        return base_accessibility
+
+    print("Empathy Director is reading the player's comfort signals...")
+
+    # Use the deterministic Cognitive Load Evaluator if available.
+    cognitive_load_score = None
+
+    if default_accessibility_engine is not None:
+        try:
+            cognitive_load_score = default_accessibility_engine.calculate_cognitive_load_score(
+                telemetry=telemetry,
+                performance_report=performance_report
+            )
+        except Exception as e:
+            print(f"Empathy Director could not calculate cognitive load score: {e}")
+            cognitive_load_score = None
+
+    telemetry_summary = _summarize_telemetry_for_empathy(
+        telemetry=telemetry,
+        performance_report=performance_report
+    )
+
+    mastery_summary = _summarize_mastery_for_empathy(
+        mastery_events=mastery_events
+    )
+
+    current_accessibility_json = json.dumps(base_accessibility.model_dump(), indent=2)
+    telemetry_json = json.dumps(telemetry_summary, indent=2)
+    mastery_json = json.dumps(mastery_summary, indent=2)
+    explicit_json = json.dumps(explicit_preferences or {}, indent=2)
+
+    cognitive_score_line = (
+        f"Deterministic Cognitive Load Score: {cognitive_load_score}/100"
+        if cognitive_load_score is not None
+        else "Deterministic Cognitive Load Score: unavailable"
+    )
+
+    system_prompt = f"""
+You are the Empathy Director for the Ontological Genesis Framework.
+
+Your sacred responsibility is to protect the player's peace, comfort, and dignity.
+You do this by outputting pure AccessibilityDNA JSON.
+
+You MUST NEVER output:
+- raw CSS
+- raw HTML
+- raw JavaScript
+- raw Python
+- raw camera code
+- raw audio code
+- hardcoded timings
+- hardcoded settings
+- explanations
+- markdown
+
+You ONLY output a JSON object matching AccessibilityDNA.
+
+Allowed values:
+- cognitive_load_level: "minimal", "balanced", "supported", "max_support"
+- motor_assist_mode: "standard", "generous_timing", "max_assist"
+- visual_contrast_profile: "standard", "high_contrast"
+- audio_cue_amplification: "off", "low", "medium", "high"
+- camera_comfort_mode: "standard", "reduced_motion", "stable_only"
+
+Empathy Rules:
+1. Explicit player preferences are the highest truth. Never override them.
+2. If telemetry shows struggle, increase support gently.
+3. If the player is succeeding and telemetry is calm, preserve comfort but do not abruptly remove support.
+4. High frame drops, high input hesitation, or repeated tutorial failures indicate cognitive or motor strain.
+5. Reduced motion and high contrast are protective responses, not punishments.
+6. Cinematic emotion may be preserved through lighting and color instead of motion.
+7. Output ONLY the final AccessibilityDNA JSON object.
+
+{SECURITY_GUARDRAILS_PROMPT}
+"""
+
+    user_message = f"""
+Current AccessibilityDNA:
+{current_accessibility_json}
+
+{cognitive_score_line}
+
+Telemetry Summary:
+{telemetry_json}
+
+Recent Mastery Events:
+{mastery_json}
+
+Explicit Player Preferences:
+{explicit_json}
+
+Player Context:
+{player_context or "No additional player context provided."}
+
+Based on these signals, output ONLY a valid JSON object with this exact structure:
+{{
+  "cognitive_load_level": "balanced",
+  "motor_assist_mode": "standard",
+  "visual_contrast_profile": "standard",
+  "audio_cue_amplification": "off",
+  "camera_comfort_mode": "standard"
+}}
+
+Remember:
+- Use only allowed values.
+- Do not output code.
+- Do not output markdown.
+- Do not output explanations.
+"""
+
+    previous_raw = ""
+    last_error = None
+
+    for attempt in range(2):
+        try:
+            if attempt == 0:
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ]
+            else:
+                correction_message = f"""
+Your previous output could not be validated as AccessibilityDNA.
+
+Validation error:
+{last_error}
+
+Previous raw output:
+{previous_raw[:1000]}
+
+Try again.
+Output ONLY a valid JSON object matching AccessibilityDNA.
+No markdown.
+No explanations.
+"""
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                    {"role": "user", "content": correction_message}
+                ]
+
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                max_tokens=300
+            )
+
+            previous_raw = response.choices[0].message.content
+            parsed = json.loads(previous_raw)
+
+            # Some models may wrap the DNA inside another key.
+            if isinstance(parsed, dict):
+                wrapper_keys = (
+                    "accessibility",
+                    "accessibility_dna",
+                    "AccessibilityDNA",
+                    "data",
+                    "result"
+                )
+
+                for key in wrapper_keys:
+                    if key in parsed and isinstance(parsed[key], dict):
+                        parsed = parsed[key]
+                        break
+
+            accessibility_dna = AccessibilityDNA(**parsed)
+
+            # Explicit preferences remain the highest truth.
+            accessibility_dna = _merge_explicit_accessibility(
+                accessibility_dna,
+                explicit_preferences
+            )
+
+            print("Empathy Director generated flawless AccessibilityDNA!")
+            return accessibility_dna
+
+        except Exception as e:
+            last_error = e
+            print(f"Empathy Director attempt {attempt + 1} failed: {e}")
+
+    print("Empathy Director using safe AccessibilityDNA failsafe.")
+    return base_accessibility

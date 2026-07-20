@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 31 Accessibility Holodeck</title>
+
+  <style>
+    :root {
+      --color-background: #F8FAFC;
+      --color-text: #0F172A;
+      --color-primary: #0F172A;
+      --color-accent: #38BDF8;
+      --color-accent-primary: #3B82F6;
+      --spacing-base: 8px;
+      --motion-duration: 0.35s;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: calc(var(--spacing-base) * 3);
+      background: var(--color-background);
+      color: var(--color-text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      transition:
+        background var(--motion-duration),
+        color var(--motion-duration);
+    }
+
+    h1 {
+      margin-top: 0;
+      color: var(--color-primary);
+    }
+
+    .panel {
+      border: 2px solid var(--color-text);
+      border-radius: 14px;
+      padding: calc(var(--spacing-base) * 2);
+      margin-bottom: calc(var(--spacing-base) * 2);
+      background: var(--color-background);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      margin-bottom: calc(var(--spacing-base) * 1.5);
+      color: var(--color-primary);
+    }
+
+    button {
+      padding: calc(var(--spacing-base) * 1.5) calc(var(--spacing-base) * 2);
+      margin: calc(var(--spacing-base) * 0.75);
+      margin-left: 0;
+      border: 2px solid var(--color-text);
+      border-radius: 10px;
+      background: var(--color-accent-primary);
+      color: #FFFFFF;
+      font-weight: 700;
+      cursor: pointer;
+      transition:
+        transform var(--motion-duration),
+        background var(--motion-duration),
+        color var(--motion-duration);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .secondary-button {
+      background: var(--color-background);
+      color: var(--color-text);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: calc(var(--spacing-base) * 1.5);
+      padding: calc(var(--spacing-base) * 0.75) 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-text) 20%, transparent);
+    }
+
+    .row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      font-weight: 700;
+      color: var(--color-primary);
+    }
+
+    .value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      word-break: break-word;
+    }
+
+    .good {
+      color: #16A34A;
+      font-weight: 800;
+    }
+
+    .warn {
+      color: #D97706;
+      font-weight: 800;
+    }
+
+    .log {
+      min-height: 180px;
+      max-height: 320px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      margin: 0;
+    }
+
+    .camera-stage {
+      height: 140px;
+      border: 2px dashed var(--color-text);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-top: calc(var(--spacing-base) * 1.5);
+    }
+
+    .camera-object {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      background: var(--color-accent-primary);
+      border: 2px solid var(--color-text);
+    }
+
+    .camera-motion .camera-object {
+      animation: camera-shake 1.2s infinite ease-in-out;
+    }
+
+    .camera-reduced-motion .camera-object {
+      animation: none;
+      transform: none;
+    }
+
+    @keyframes camera-shake {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      20% { transform: translate(-8px, 4px) rotate(-2deg); }
+      40% { transform: translate(7px, -5px) rotate(2deg); }
+      60% { transform: translate(-5px, -3px) rotate(-1deg); }
+      80% { transform: translate(6px, 5px) rotate(1deg); }
+      100% { transform: translate(0, 0) rotate(0deg); }
+    }
+
+    .ogf-reduced-motion * {
+      transition: none !important;
+      animation: none !important;
+    }
+
+    .file-input {
+      display: block;
+      margin-top: calc(var(--spacing-base) * 1.5);
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Day 31 Accessibility Holodeck</h1>
+
+  <div class="panel">
+    <h2>Holodeck Controls</h2>
+
+    <button onclick="OGFAccessibilityHolodeck.setProfile('standard')">
+      Standard Reality
+    </button>
+
+    <button onclick="OGFAccessibilityHolodeck.setProfile('high_contrast+generous_timing+reduced_motion')">
+      High Contrast + Generous Timing + Reduced Motion
+    </button>
+
+    <button onclick="OGFAccessibilityHolodeck.setProfile('comfort')">
+      Comfort Profile
+    </button>
+
+    <button onclick="OGFAccessibilityHolodeck.setProfile('max_support')">
+      Max Support Profile
+    </button>
+
+    <input
+      type="file"
+      accept=".json,application/json"
+      class="file-input"
+      onchange="OGFAccessibilityHolodeck.handleStateFile(event)"
+    />
+
+    <p>
+      Use the file input to load your <strong>OGF_STATE.json</strong> after running the CLI command.
+      The Holodeck will read the AccessibilityDNA and adapt all systems from that single JSON truth.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>AccessibilityDNA</h2>
+    <div id="dna-panel"></div>
+  </div>
+
+  <div class="panel">
+    <h2>UI Token Synthesizer</h2>
+    <div id="ui-panel"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Input Engine</h2>
+
+    <button class="secondary-button" onclick="OGFAccessibilityHolodeck.simulateDodgeAt300ms()">
+      Simulate Dodge at 300 ms
+    </button>
+
+    <div id="input-panel"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Camera Comfort Engine</h2>
+    <div id="camera-panel"></div>
+
+    <div id="camera-stage" class="camera-stage camera-motion">
+      <div class="camera-object"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Audio DSP Engine</h2>
+
+    <button onclick="OGFAccessibilityHolodeck.playCriticalCue()">
+      Play Critical Cue
+    </button>
+
+    <div id="audio-panel"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Deterministic Event Log</h2>
+    <pre id="log" class="log"></pre>
+  </div>
+
+  <script>
+    const STANDARD_DNA = {
+      cognitive_load_level: "balanced",
+      motor_assist_mode: "standard",
+      visual_contrast_profile: "standard",
+      audio_cue_amplification: "off",
+      camera_comfort_mode: "standard"
+    };
+
+    const ACCESSIBILITY_PRESETS = {
+      standard: {
+        cognitive_load_level: "balanced",
+        motor_assist_mode: "standard",
+        visual_contrast_profile: "standard",
+        audio_cue_amplification: "off",
+        camera_comfort_mode: "standard"
+      },
+      comfort: {
+        cognitive_load_level: "supported",
+        motor_assist_mode: "generous_timing",
+        visual_contrast_profile: "high_contrast",
+        audio_cue_amplification: "high",
+        camera_comfort_mode: "reduced_motion"
+      },
+      max_support: {
+        cognitive_load_level: "max_support",
+        motor_assist_mode: "max_assist",
+        visual_contrast_profile: "high_contrast",
+        audio_cue_amplification: "high",
+        camera_comfort_mode: "stable_only"
+      }
+    };
+
+    const ACCESSIBILITY_TOKEN_MAP = {
+      high_contrast: { visual_contrast_profile: "high_contrast" },
+      standard_contrast: { visual_contrast_profile: "standard" },
+
+      generous_timing: { motor_assist_mode: "generous_timing" },
+      max_assist: { motor_assist_mode: "max_assist" },
+      standard_timing: { motor_assist_mode: "standard" },
+
+      reduced_motion: { camera_comfort_mode: "reduced_motion" },
+      stable_only: { camera_comfort_mode: "stable_only" },
+      standard_camera: { camera_comfort_mode: "standard" },
+
+      audio_off: { audio_cue_amplification: "off" },
+      audio_low: { audio_cue_amplification: "low" },
+      audio_medium: { audio_cue_amplification: "medium" },
+      audio_high: { audio_cue_amplification: "high" },
+
+      cognitive_minimal: { cognitive_load_level: "minimal" },
+      cognitive_balanced: { cognitive_load_level: "balanced" },
+      cognitive_supported: { cognitive_load_level: "supported" },
+      cognitive_max_support: { cognitive_load_level: "max_support" }
+    };
+
+    const STANDARD_UI_TOKENS = {
+      "--color-background": "#F8FAFC",
+      "--color-text": "#0F172A",
+      "--color-primary": "#0F172A",
+      "--color-accent": "#38BDF8",
+      "--color-accent-primary": "#3B82F6",
+      "--spacing-base": "8px",
+      "--motion-duration": "0.35s"
+    };
+
+    const HIGH_CONTRAST_UI_TOKENS = {
+      "--color-background": "#FFFFFF",
+      "--color-text": "#000000",
+      "--color-primary": "#000000",
+      "--color-accent": "#0B57D0",
+      "--color-accent-primary": "#0B57D0",
+      "--spacing-base": "12px",
+      "--motion-duration": "0s"
+    };
+
+    const BASE_INPUT_WINDOWS_MS = {
+      dodge: 200,
+      parry: 150,
+      confirm: 300,
+      interact: 250,
+      jump: 200
+    };
+
+    const MOTOR_ASSIST_MULTIPLIERS = {
+      standard: 1.0,
+      generous_timing: 2.5,
+      max_assist: 3.5
+    };
+
+    const CAMERA_COMFORT_PROFILES = {
+      standard: {
+        shake_amplitude: 1.0,
+        sine_wave_shake_enabled: true,
+        fov_change_multiplier: 1.0,
+        interpolation_mode: "smooth_lerp",
+        lerp_duration_seconds: 0.35,
+        snap_to_stable_angles: false,
+        emotion_preservation_channel: "motion"
+      },
+      reduced_motion: {
+        shake_amplitude: 0.0,
+        sine_wave_shake_enabled: false,
+        fov_change_multiplier: 0.25,
+        interpolation_mode: "snap",
+        lerp_duration_seconds: 0.0,
+        snap_to_stable_angles: true,
+        emotion_preservation_channel: "lighting_and_color"
+      },
+      stable_only: {
+        shake_amplitude: 0.0,
+        sine_wave_shake_enabled: false,
+        fov_change_multiplier: 0.0,
+        interpolation_mode: "snap",
+        lerp_duration_seconds: 0.0,
+        snap_to_stable_angles: true,
+        emotion_preservation_channel: "lighting_and_color"
+      }
+    };
+
+    const AUDIO_AMPLIFICATION_DB = {
+      off: 0.0,
+      low: 3.0,
+      medium: 6.0,
+      high: 10.0
+    };
+
+    let currentDNA = { ...STANDARD_DNA };
+    let activeInputWindows = { ...BASE_INPUT_WINDOWS_MS };
+    let activeCameraState = { ...CAMERA_COMFORT_PROFILES.standard };
+    let activeAudioState = {
+      mode: "off",
+      boost_db: 0.0,
+      critical_frequency_band_hz: [1000, 4000]
+    };
+
+    let audioContext = null;
+
+    function log(message) {
+      const logElement = document.getElementById("log");
+      const timestamp = new Date().toISOString();
+      logElement.textContent += `[${timestamp}] ${message}\n`;
+      logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    function row(label, value) {
+      return `
+        <div class="row">
+          <div class="label">${label}</div>
+          <div class="value">${value}</div>
+        </div>
+      `;
+    }
+
+    function parseProfile(mode, baseDNA) {
+      const raw = String(mode || "").trim().toLowerCase();
+
+      if (raw === "auto" || raw === "empathy" || raw === "brain") {
+        log("Auto empathy mode requested. Holodeck uses comfort profile as deterministic fallback.");
+        return { ...baseDNA, ...ACCESSIBILITY_PRESETS.comfort };
+      }
+
+      const normalized = raw
+        .replace(/ /g, "_")
+        .replace(/,/g, "+")
+        .replace(/;/g, "+")
+        .replace(/\//g, "+");
+
+      if (ACCESSIBILITY_PRESETS[normalized]) {
+        return { ...baseDNA, ...ACCESSIBILITY_PRESETS[normalized] };
+      }
+
+      if (normalized === "standard" || normalized === "default" || normalized === "reset") {
+        return { ...STANDARD_DNA };
+      }
+
+      const tokens = normalized.split("+").filter(Boolean);
+      const updates = { ...baseDNA };
+
+      for (const token of tokens) {
+        if (token === "standard" || token === "default" || token === "reset") {
+          Object.assign(updates, STANDARD_DNA);
+        } else if (ACCESSIBILITY_PRESETS[token]) {
+          Object.assign(updates, ACCESSIBILITY_PRESETS[token]);
+        } else if (ACCESSIBILITY_TOKEN_MAP[token]) {
+          Object.assign(updates, ACCESSIBILITY_TOKEN_MAP[token]);
+        } else {
+          log(`Unknown accessibility token ignored: ${token}`);
+        }
+      }
+
+      return updates;
+    }
+
+    function applyUITokens() {
+      const tokens = currentDNA.visual_contrast_profile === "high_contrast"
+        ? HIGH_CONTRAST_UI_TOKENS
+        : STANDARD_UI_TOKENS;
+
+      for (const [key, value] of Object.entries(tokens)) {
+        document.documentElement.style.setProperty(key, value);
+      }
+
+      const reducedMotion = currentDNA.camera_comfort_mode !== "standard";
+      document.body.classList.toggle("ogf-reduced-motion", reducedMotion);
+
+      const cameraStage = document.getElementById("camera-stage");
+      cameraStage.classList.toggle("camera-motion", !reducedMotion);
+      cameraStage.classList.toggle("camera-reduced-motion", reducedMotion);
+
+      const uiPanel = document.getElementById("ui-panel");
+
+      uiPanel.innerHTML = `
+        ${row("Visual Contrast Profile", currentDNA.visual_contrast_profile)}
+        ${row("Background", tokens["--color-background"])}
+        ${row("Text", tokens["--color-text"])}
+        ${row("Primary", tokens["--color-primary"])}
+        ${row("Accent", tokens["--color-accent"])}
+        ${row("Accent Primary", tokens["--color-accent-primary"])}
+        ${row("Spacing Base", tokens["--spacing-base"])}
+        ${row("Motion Duration", tokens["--motion-duration"])}
+        ${row("WCAG Intent", currentDNA.visual_contrast_profile === "high_contrast" ? '<span class="good">AAA high-contrast shift</span>' : '<span class="warn">Standard contrast</span>')}
+      `;
+    }
+
+    function applyInputTiming() {
+      const multiplier = MOTOR_ASSIST_MULTIPLIERS[currentDNA.motor_assist_mode] || 1.0;
+
+      activeInputWindows = {};
+
+      for (const [actionName, baseMs] of Object.entries(BASE_INPUT_WINDOWS_MS)) {
+        activeInputWindows[actionName] = Math.round(baseMs * multiplier);
+      }
+
+      const inputPanel = document.getElementById("input-panel");
+
+      let rows = `
+        ${row("Motor Assist Mode", currentDNA.motor_assist_mode)}
+        ${row("Global Multiplier", multiplier.toFixed(2))}
+        ${row("Formula", "active_window_ms = base_window_ms * motor_assist_multiplier")}
+      `;
+
+      for (const [actionName, activeMs] of Object.entries(activeInputWindows)) {
+        rows += row(
+          `${actionName} window`,
+          `${BASE_INPUT_WINDOWS_MS[actionName]} ms → <strong>${activeMs} ms</strong>`
+        );
+      }
+
+      inputPanel.innerHTML = rows;
+    }
+
+    function applyCameraComfort() {
+      const profile = CAMERA_COMFORT_PROFILES[currentDNA.camera_comfort_mode] || CAMERA_COMFORT_PROFILES.standard;
+
+      activeCameraState = { ...profile };
+
+      const cameraPanel = document.getElementById("camera-panel");
+
+      cameraPanel.innerHTML = `
+        ${row("Camera Comfort Mode", currentDNA.camera_comfort_mode)}
+        ${row("Shake Amplitude", activeCameraState.shake_amplitude.toFixed(2))}
+        ${row("Sine-Wave Shake", activeCameraState.sine_wave_shake_enabled ? "enabled" : '<span class="good">eliminated</span>')}
+        ${row("FOV Change Multiplier", activeCameraState.fov_change_multiplier.toFixed(2))}
+        ${row("Interpolation Mode", activeCameraState.interpolation_mode)}
+        ${row("Lerp Duration", `${activeCameraState.lerp_duration_seconds.toFixed(2)} s`)}
+        ${row("Snap To Stable Angles", activeCameraState.snap_to_stable_angles ? '<span class="good">yes</span>' : "no")}
+        ${row("Emotion Preservation", activeCameraState.emotion_preservation_channel)}
+      `;
+    }
+
+    function applyAudioAmplification() {
+      const boostDb = AUDIO_AMPLIFICATION_DB[currentDNA.audio_cue_amplification] || 0.0;
+
+      activeAudioState = {
+        mode: currentDNA.audio_cue_amplification,
+        boost_db: boostDb,
+        critical_frequency_band_hz: [1000, 4000]
+      };
+
+      const audioPanel = document.getElementById("audio-panel");
+
+      audioPanel.innerHTML = `
+        ${row("Audio Cue Amplification", activeAudioState.mode)}
+        ${row("Critical Cue Boost", `${activeAudioState.boost_db.toFixed(1)} dB`)}
+        ${row("Critical Frequency Band", `${activeAudioState.critical_frequency_band_hz[0]} Hz - ${activeAudioState.critical_frequency_band_hz[1]} Hz`)}
+        ${row("Formula", "critical_cue_volume_db = base_cue_volume_db + accessibility_boost_db")}
+      `;
+    }
+
+    function renderDNA() {
+      const dnaPanel = document.getElementById("dna-panel");
+
+      dnaPanel.innerHTML = `
+        ${row("cognitive_load_level", currentDNA.cognitive_load_level)}
+        ${row("motor_assist_mode", currentDNA.motor_assist_mode)}
+        ${row("visual_contrast_profile", currentDNA.visual_contrast_profile)}
+        ${row("audio_cue_amplification", currentDNA.audio_cue_amplification)}
+        ${row("camera_comfort_mode", currentDNA.camera_comfort_mode)}
+      `;
+    }
+
+    function applyAccessibility(dna, source) {
+      currentDNA = {
+        ...STANDARD_DNA,
+        ...dna
+      };
+
+      applyUITokens();
+      applyInputTiming();
+      applyCameraComfort();
+      applyAudioAmplification();
+      renderDNA();
+
+      log(`AccessibilityDNA applied from ${source}.`);
+      log(`UI: ${currentDNA.visual_contrast_profile}, Input: ${currentDNA.motor_assist_mode}, Camera: ${currentDNA.camera_comfort_mode}, Audio: ${currentDNA.audio_cue_amplification}`);
+
+      window.dispatchEvent(new CustomEvent("ogf:accessibility-changed", {
+        detail: {
+          accessibility_dna: currentDNA,
+          active_input_windows_ms: activeInputWindows,
+          active_camera_state: activeCameraState,
+          active_audio_state: activeAudioState,
+          source
+        }
+      }));
+    }
+
+    function setProfile(mode) {
+      const nextDNA = parseProfile(mode, currentDNA);
+      applyAccessibility(nextDNA, `profile:${mode}`);
+    }
+
+    function handleStateFile(event) {
+      const file = event.target.files[0];
+
+      if (!file) {
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function (loadEvent) {
+        try {
+          const state = JSON.parse(loadEvent.target.result);
+
+          const dna =
+            state.accessibility_dna ||
+            (state.app_dna && state.app_dna.accessibility) ||
+            null;
+
+          if (!dna) {
+            log("OGF_STATE.json loaded, but no accessibility_dna was found.");
+            return;
+          }
+
+          applyAccessibility(dna, `file:${file.name}`);
+        } catch (error) {
+          log(`Invalid JSON file: ${error.message}`);
+        }
+      };
+
+      reader.readAsText(file);
+    }
+
+    function simulateDodgeAt300ms() {
+      const elapsedMs = 300;
+      const dodgeWindow = activeInputWindows.dodge || 0;
+      const success = elapsedMs <= dodgeWindow;
+
+      if (success) {
+        log(`Dodge at ${elapsedMs} ms: SUCCESS. Active window is ${dodgeWindow} ms.`);
+      } else {
+        log(`Dodge at ${elapsedMs} ms: MISS. Active window is ${dodgeWindow} ms.`);
+      }
+    }
+
+    function playCriticalCue() {
+      try {
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        const baseVolume = 0.06;
+        const boostLinear = Math.pow(10, activeAudioState.boost_db / 20);
+        const finalVolume = Math.min(0.45, baseVolume * boostLinear);
+
+        oscillator.type = "square";
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+
+        gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(finalVolume, audioContext.currentTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.35);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.4);
+
+        log(`Critical cue played with ${activeAudioState.boost_db.toFixed(1)} dB accessibility boost.`);
+      } catch (error) {
+        log(`Audio test failed: ${error.message}`);
+      }
+    }
+
+    function getState() {
+      return {
+        accessibility_dna: currentDNA,
+        active_input_windows_ms: activeInputWindows,
+        active_camera_state: activeCameraState,
+        active_audio_state: activeAudioState
+      };
+    }
+
+    window.OGFAccessibilityHolodeck = {
+      setProfile,
+      applyAccessibility,
+      handleStateFile,
+      simulateDodgeAt300ms,
+      playCriticalCue,
+      getState
+    };
+
+    // Initial render.
+    applyAccessibility(STANDARD_DNA, "holodeck-initialization");
+
+    // If the web app injects OGF_STATE globally, use it automatically.
+    if (window.OGF_STATE) {
+      const dna =
+        window.OGF_STATE.accessibility_dna ||
+        (window.OGF_STATE.app_dna && window.OGF_STATE.app_dna.accessibility);
+
+      if (dna) {
+        applyAccessibility(dna, "window.OGF_STATE");
+      }
+    }
+  </script>
+</body>
+</html>

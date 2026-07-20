@@ -62,6 +62,44 @@ from packages.core.models import (
 from packages.core.telemetry_engine import telemetry_brain
 from packages.core.modding_engine import engine as modding_engine # ADDED FOR DAY 26
 
+
+# ==========================================
+# DAY 31 SAFE IMPORTS:
+# These are wrapped so the CLI remains protected
+# even if a single engine file is missing.
+# ==========================================
+try:
+    from packages.core.models import AccessibilityDNA, DesignTokens
+except Exception:
+    AccessibilityDNA = None
+    DesignTokens = None
+
+try:
+    from packages.core.brain import act_as_empathy_director
+except Exception:
+    act_as_empathy_director = None
+
+try:
+    from packages.core.accessibility_engine import default_accessibility_engine
+except Exception:
+    default_accessibility_engine = None
+
+try:
+    from packages.core.input_engine import DeterministicInputEngine
+except Exception:
+    DeterministicInputEngine = None
+
+try:
+    from packages.core.accessibility_synthesizer import default_accessibility_synthesizer
+except Exception:
+    default_accessibility_synthesizer = None
+
+try:
+    from packages.core.camera_comfort_engine import default_camera_comfort_engine
+except Exception:
+    default_camera_comfort_engine = None
+
+
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
 supabase = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
@@ -80,6 +118,354 @@ def get_active_project_id():
     except Exception as e:
         console.print(f"[red]Error finding project: {e}[/red]")
     return None
+
+
+# ==========================================
+# DAY 31: ACCESSIBILITY CLI HELPERS
+# ==========================================
+
+ACCESSIBILITY_PROFILE_PRESETS = {
+    "standard": {
+        "cognitive_load_level": "balanced",
+        "motor_assist_mode": "standard",
+        "visual_contrast_profile": "standard",
+        "audio_cue_amplification": "off",
+        "camera_comfort_mode": "standard",
+    },
+    "comfort": {
+        "cognitive_load_level": "supported",
+        "motor_assist_mode": "generous_timing",
+        "visual_contrast_profile": "high_contrast",
+        "audio_cue_amplification": "high",
+        "camera_comfort_mode": "reduced_motion",
+    },
+    "max_support": {
+        "cognitive_load_level": "max_support",
+        "motor_assist_mode": "max_assist",
+        "visual_contrast_profile": "high_contrast",
+        "audio_cue_amplification": "high",
+        "camera_comfort_mode": "stable_only",
+    },
+}
+
+ACCESSIBILITY_TOKEN_MAP = {
+    # Visual contrast tokens
+    "high_contrast": {"visual_contrast_profile": "high_contrast"},
+    "standard_contrast": {"visual_contrast_profile": "standard"},
+
+    # Motor assist tokens
+    "generous_timing": {"motor_assist_mode": "generous_timing"},
+    "max_assist": {"motor_assist_mode": "max_assist"},
+    "standard_timing": {"motor_assist_mode": "standard"},
+
+    # Camera comfort tokens
+    "reduced_motion": {"camera_comfort_mode": "reduced_motion"},
+    "stable_only": {"camera_comfort_mode": "stable_only"},
+    "standard_camera": {"camera_comfort_mode": "standard"},
+
+    # Audio cue tokens
+    "audio_off": {"audio_cue_amplification": "off"},
+    "audio_low": {"audio_cue_amplification": "low"},
+    "audio_medium": {"audio_cue_amplification": "medium"},
+    "audio_high": {"audio_cue_amplification": "high"},
+
+    # Cognitive load tokens
+    "cognitive_minimal": {"cognitive_load_level": "minimal"},
+    "cognitive_balanced": {"cognitive_load_level": "balanced"},
+    "cognitive_supported": {"cognitive_load_level": "supported"},
+    "cognitive_max_support": {"cognitive_load_level": "max_support"},
+}
+
+
+def _to_json_safe(obj):
+    """
+    Convert Pydantic models or dicts into JSON-safe dictionaries.
+    """
+    if obj is None:
+        return {}
+
+    if isinstance(obj, dict):
+        return copy.deepcopy(obj)
+
+    if hasattr(obj, "model_dump"):
+        try:
+            return obj.model_dump(mode="json")
+        except Exception:
+            return obj.model_dump()
+
+    if hasattr(obj, "dict"):
+        return obj.dict()
+
+    return {}
+
+
+def _load_ogf_state():
+    """
+    Load OGF_STATE.json safely.
+    """
+    if not os.path.exists(STATE_FILE):
+        return {}
+
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict):
+            return data
+
+        return {}
+
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not read OGF_STATE.json. Starting fresh. {e}[/yellow]")
+        return {}
+
+
+def _save_ogf_state(state_data):
+    """
+    Save OGF_STATE.json safely.
+    """
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state_data, f, indent=4)
+        return True
+
+    except Exception as e:
+        console.print(f"[bold red]Error saving OGF_STATE.json: {e}[/bold red]")
+        return False
+
+
+def _get_current_accessibility(state_data):
+    """
+    Read current AccessibilityDNA from OGF_STATE.json.
+    """
+    if AccessibilityDNA is None:
+        return None
+
+    current = state_data.get("accessibility_dna")
+
+    if not current:
+        app_dna = state_data.get("app_dna", {})
+        if isinstance(app_dna, dict):
+            current = app_dna.get("accessibility")
+
+    if current and isinstance(current, dict):
+        try:
+            return AccessibilityDNA(**current)
+        except Exception:
+            return AccessibilityDNA()
+
+    return AccessibilityDNA()
+
+
+def _apply_accessibility_updates(current_accessibility, updates):
+    """
+    Apply a dictionary of valid updates onto AccessibilityDNA.
+    """
+    if AccessibilityDNA is None:
+        return None
+
+    current_dict = _to_json_safe(current_accessibility)
+
+    if not current_dict:
+        current_dict = _to_json_safe(AccessibilityDNA())
+
+    current_dict.update(updates)
+
+    try:
+        return AccessibilityDNA(**current_dict)
+    except Exception:
+        return AccessibilityDNA()
+
+
+def _parse_accessibility_mode(mode, current_accessibility):
+    """
+    Parse CLI profile mode into AccessibilityDNA.
+
+    Examples:
+    - standard
+    - comfort
+    - max_support
+    - high_contrast+generous_timing+reduced_motion
+    - high_contrast,generous_timing,reduced_motion
+    """
+    if AccessibilityDNA is None:
+        return None, [], "AccessibilityDNA is not available."
+
+    raw_mode = str(mode or "").strip().lower()
+
+    if raw_mode in ("auto", "empathy", "brain"):
+        return "auto", ["empathy_director"], None
+
+    normalized = (
+        raw_mode
+        .replace(" ", "_")
+        .replace(",", "+")
+        .replace(";", "+")
+        .replace("/", "+")
+    )
+
+    updates = {}
+    applied_tokens = []
+
+    if normalized in ACCESSIBILITY_PROFILE_PRESETS:
+        updates.update(ACCESSIBILITY_PROFILE_PRESETS[normalized])
+        applied_tokens.append(normalized)
+
+    elif normalized in ("standard", "default", "reset"):
+        updates.update(ACCESSIBILITY_PROFILE_PRESETS["standard"])
+        applied_tokens.append("standard")
+
+    else:
+        tokens = [token for token in normalized.split("+") if token]
+
+        for token in tokens:
+            if token in ("standard", "default", "reset"):
+                updates.update(ACCESSIBILITY_PROFILE_PRESETS["standard"])
+                applied_tokens.append("standard")
+
+            elif token in ACCESSIBILITY_PROFILE_PRESETS:
+                updates.update(ACCESSIBILITY_PROFILE_PRESETS[token])
+                applied_tokens.append(token)
+
+            elif token in ACCESSIBILITY_TOKEN_MAP:
+                updates.update(ACCESSIBILITY_TOKEN_MAP[token])
+                applied_tokens.append(token)
+
+            else:
+                return None, applied_tokens, f"Unknown accessibility token: '{token}'"
+
+    if not updates:
+        return None, applied_tokens, "No accessibility updates found."
+
+    new_accessibility = _apply_accessibility_updates(current_accessibility, updates)
+    return new_accessibility, applied_tokens, None
+
+
+def _print_ui_accessibility_report(report):
+    """
+    Print exact UI Token Synthesizer changes.
+    """
+    if not report:
+        console.print("[yellow]UI Token Synthesizer: unavailable.[/yellow]")
+        return
+
+    changes = report.get("changes", {})
+
+    if not changes:
+        console.print("[green]UI Token Synthesizer: no color changes required.[/green]")
+        return
+
+    table = Table(title="🎨 UI Token Synthesizer Mathematical Changes")
+    table.add_column("Token", style="cyan")
+    table.add_column("Old", style="red")
+    table.add_column("New", style="green")
+    table.add_column("Before", style="dim")
+    table.add_column("After", style="bold")
+
+    for path, change in list(changes.items())[:15]:
+        if isinstance(change, dict):
+            old_value = str(change.get("old", ""))
+            new_value = str(change.get("new", ""))
+            before = str(change.get("contrast_before", change.get("reason", "")))
+            after = str(change.get("contrast_after", change.get("target_ratio", "")))
+            table.add_row(path, old_value, new_value, before, after)
+        else:
+            table.add_row(path, str(change), "", "", "")
+
+    console.print(table)
+
+
+def _print_input_accessibility_report(report):
+    """
+    Print exact Input Engine timing changes.
+    """
+    if not report:
+        console.print("[yellow]Input Engine: unavailable.[/yellow]")
+        return
+
+    changes = report.get("changes", {})
+
+    if not changes:
+        console.print(
+            f"[green]Input Engine: mode is now '{report.get('new_motor_assist_mode', 'standard')}'. "
+            f"No timing windows needed changing.[/green]"
+        )
+        return
+
+    table = Table(title="🎮 Input Engine Mathematical Timing Changes")
+    table.add_column("Action", style="cyan")
+    table.add_column("Base ms", style="dim")
+    table.add_column("Previous ms", style="red")
+    table.add_column("New ms", style="green")
+    table.add_column("Multiplier", style="magenta")
+
+    for action_name, change in changes.items():
+        table.add_row(
+            str(action_name),
+            str(change.get("base_window_ms", "")),
+            str(change.get("previous_active_window_ms", "")),
+            str(change.get("new_active_window_ms", "")),
+            str(change.get("multiplier", "")),
+        )
+
+    console.print(table)
+
+
+def _print_audio_accessibility_report(report):
+    """
+    Print exact Audio DSP DNA changes.
+    """
+    if not report:
+        console.print("[yellow]Audio DSP Engine: unavailable.[/yellow]")
+        return
+
+    table = Table(title="🔊 Audio DSP Mathematical Changes")
+    table.add_column("Parameter", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Mode", str(report.get("audio_cue_amplification", "off")))
+    table.add_row("Previous Boost dB", str(report.get("previous_boost_db", 0.0)))
+    table.add_row("New Boost dB", str(report.get("new_boost_db", 0.0)))
+    table.add_row("Critical Band Hz", str(report.get("critical_frequency_band_hz", [])))
+    table.add_row("Formula", str(report.get("formula", "")))
+
+    console.print(table)
+
+
+def _print_camera_accessibility_report(report):
+    """
+    Print exact Camera Comfort Engine changes.
+    """
+    if not report:
+        console.print("[yellow]Camera Comfort Engine: unavailable.[/yellow]")
+        return
+
+    changes = report.get("changes", {})
+
+    if not changes:
+        console.print(
+            f"[green]Camera Comfort Engine: mode is now '{report.get('camera_comfort_mode', 'standard')}'. "
+            f"No camera fields needed changing.[/green]"
+        )
+        return
+
+    table = Table(title="🎥 Camera Comfort Mathematical Changes")
+    table.add_column("Field", style="cyan")
+    table.add_column("Old", style="red")
+    table.add_column("New", style="green")
+
+    for field_name, change in changes.items():
+        if isinstance(change, dict):
+            table.add_row(
+                str(field_name),
+                str(change.get("old", "")),
+                str(change.get("new", "")),
+            )
+        else:
+            table.add_row(str(field_name), str(change), "")
+
+    console.print(table)
+
 
 # ==========================================
 # 2. THE CLI BUTTONS (Click Library)
@@ -1144,6 +1530,275 @@ def chrono_test():
     
     console.print(table)
 
+# ==========================================
+# DAY 31: THE ACCESSIBILITY HOLE (EMPATHETIC ADAPTATION)
+# ==========================================
+@cli.group()
+def accessibility():
+    """Day 31: Accessibility / Empathetic Adaptation Commands."""
+    pass
+
+@accessibility.command(name="profile")
+@click.argument("mode", required=True)
+def accessibility_profile(mode):
+    """
+    Sets the AccessibilityDNA profile and adapts all systems.
+
+    Examples:
+    camera accessibility profile standard
+    camera accessibility profile comfort
+    camera accessibility profile max_support
+    camera accessibility profile high_contrast+generous_timing+reduced_motion
+    camera accessibility profile auto
+    """
+    console.print(
+        Panel(
+            f"[bold cyan]Day 31: Empathetic Adaptation Engine[/bold cyan]\n"
+            f"Requested profile: [bold]{mode}[/bold]",
+            title="Accessibility Hole",
+            border_style="cyan"
+        )
+    )
+
+    if AccessibilityDNA is None:
+        console.print("[bold red]AccessibilityDNA is not available. Check packages/core/models.py.[/bold red]")
+        return
+
+    # 1. Load the master save file.
+    state_data = _load_ogf_state()
+
+    # 2. Read current AccessibilityDNA.
+    current_accessibility = _get_current_accessibility(state_data)
+
+    # 3. Resolve the new AccessibilityDNA.
+    applied_tokens = []
+
+    if str(mode).strip().lower() in ("auto", "empathy", "brain"):
+        if act_as_empathy_director is None:
+            console.print("[bold red]The Empathy Director is not available. Check packages/core/brain.py.[/bold red]")
+            return
+
+        with console.status("[bold green]Empathy Director is reading player comfort signals...[/bold green]"):
+            new_accessibility = act_as_empathy_director(
+                current_accessibility=current_accessibility,
+                telemetry=state_data.get("telemetry"),
+                performance_report=state_data.get("performance_report"),
+                mastery_events=state_data.get("mastery_events"),
+                explicit_preferences=state_data.get("explicit_accessibility_preferences"),
+                player_context="CLI accessibility profile command."
+            )
+
+        applied_tokens = ["empathy_director"]
+
+    else:
+        new_accessibility, applied_tokens, parse_error = _parse_accessibility_mode(
+            mode=mode,
+            current_accessibility=current_accessibility
+        )
+
+        if parse_error:
+            allowed_modes = """
+[bold]Standard Presets:[/bold]
+- standard
+- comfort
+- max_support
+
+[bold]Custom Tokens (combine with +):[/bold]
+- high_contrast
+- standard_contrast
+- generous_timing
+- max_assist
+- standard_timing
+- reduced_motion
+- stable_only
+- standard_camera
+- audio_off
+- audio_low
+- audio_medium
+- audio_high
+- cognitive_minimal
+- cognitive_balanced
+- cognitive_supported
+- cognitive_max_support
+
+[bold]Example:[/bold]
+camera accessibility profile high_contrast+generous_timing+reduced_motion
+"""
+            console.print(Panel(
+                f"[bold red]Could not parse accessibility profile.[/bold red]\n\n"
+                f"[yellow]Reason:[/yellow] {parse_error}\n\n"
+                f"{allowed_modes}",
+                title="Accessibility Profile Help",
+                border_style="yellow"
+            ))
+            return
+
+    accessibility_dict = _to_json_safe(new_accessibility)
+
+    # 4. Write AccessibilityDNA into OGF_STATE.json.
+    state_data["accessibility_dna"] = accessibility_dict
+
+    app_dna_dict = state_data.get("app_dna")
+    if not isinstance(app_dna_dict, dict):
+        app_dna_dict = _to_json_safe(AppDNA())
+
+    app_dna_dict["accessibility"] = accessibility_dict
+    state_data["app_dna"] = app_dna_dict
+
+    console.print("[bold green]✅ AccessibilityDNA updated in OGF_STATE.json.[/bold green]")
+
+    # 5. Adapt UI Token Synthesizer.
+    ui_report = {}
+
+    if default_accessibility_synthesizer is not None:
+        with console.status("[bold yellow]Adapting UI Token Synthesizer...[/bold yellow]"):
+            design_tokens = app_dna_dict.get("design_tokens", _to_json_safe(AppDNA().design_tokens))
+
+            ui_compiler = app_dna_dict.get("ui_compiler")
+            atomic_tokens = None
+            if isinstance(ui_compiler, dict):
+                atomic_tokens = ui_compiler.get("atomic_tokens")
+
+            adapted_design_tokens, adapted_atomic_tokens, ui_events, ui_report = (
+                default_accessibility_synthesizer.adapt_visual_contrast(
+                    accessibility=new_accessibility,
+                    design_tokens=design_tokens,
+                    atomic_tokens=atomic_tokens
+                )
+            )
+
+            app_dna_dict["design_tokens"] = _to_json_safe(adapted_design_tokens)
+
+            if adapted_atomic_tokens:
+                if not isinstance(ui_compiler, dict):
+                    ui_compiler = {}
+
+                ui_compiler["atomic_tokens"] = _to_json_safe(adapted_atomic_tokens)
+                app_dna_dict["ui_compiler"] = ui_compiler
+
+    # 6. Adapt Input Engine.
+    input_report = {}
+
+    if DeterministicInputEngine is not None:
+        with console.status("[bold yellow]Adapting Input Engine timing windows...[/bold yellow]"):
+            input_engine = DeterministicInputEngine()
+
+            input_dna_list = state_data.get("input_dna", [])
+            if isinstance(input_dna_list, list) and input_dna_list:
+                input_engine.build_map_from_dna(input_dna_list)
+
+            input_timing_state, input_events, input_report = input_engine.apply_accessibility(
+                accessibility=new_accessibility
+            )
+
+            state_data["input_timing_state"] = input_timing_state
+
+    # 7. Adapt Audio DSP DNA.
+    audio_report = {}
+
+    if default_accessibility_synthesizer is not None:
+        with console.status("[bold yellow]Adapting Audio DSP DNA...[/bold yellow]"):
+            audio_dna = state_data.get("audio_dna")
+
+            adapted_audio_dna, audio_events, audio_report = (
+                default_accessibility_synthesizer.adapt_audio_cues(
+                    accessibility=new_accessibility,
+                    audio_dna=audio_dna
+                )
+            )
+
+            state_data["audio_dna"] = _to_json_safe(adapted_audio_dna)
+
+    # 8. Adapt Camera Comfort Engine.
+    camera_report = {}
+
+    if default_camera_comfort_engine is not None:
+        with console.status("[bold yellow]Adapting Camera Comfort Engine...[/bold yellow]"):
+            camera_rig_state = state_data.get("camera_rig_state")
+
+            adapted_camera_rig, camera_events, camera_report = (
+                default_camera_comfort_engine.adapt_camera_rig(
+                    accessibility=new_accessibility,
+                    camera_rig_state=camera_rig_state
+                )
+            )
+
+            state_data["camera_rig_state"] = adapted_camera_rig
+
+    # 9. Save final adaptation metadata.
+    state_data["last_accessibility_adaptation"] = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "mode_argument": mode,
+        "applied_tokens": applied_tokens,
+        "accessibility_dna": accessibility_dict,
+        "summary": {
+            "ui_color_changes": ui_report.get("changed_color_tokens", 0),
+            "input_timing_changes": input_report.get("changed_actions", 0),
+            "audio_changed": audio_report.get("changed", False),
+            "camera_field_changes": camera_report.get("changed_fields", 0),
+        }
+    }
+
+    # 10. Persist reality.
+    saved = _save_ogf_state(state_data)
+
+    if saved:
+        console.print(f"[bold green]✅ {os.path.basename(STATE_FILE)} saved successfully.[/bold green]")
+    else:
+        console.print("[bold red]❌ Could not save OGF_STATE.json.[/bold red]")
+
+    # 11. Print the exact mathematical changes.
+    profile_table = Table(title="🧬 Active AccessibilityDNA")
+    profile_table.add_column("DNA Field", style="cyan")
+    profile_table.add_column("Value", style="green")
+
+    for key, value in accessibility_dict.items():
+        profile_table.add_row(str(key), str(value))
+
+    console.print(profile_table)
+
+    summary_table = Table(title="🌍 System Adaptation Summary")
+    summary_table.add_column("System", style="cyan")
+    summary_table.add_column("Changes", style="magenta")
+    summary_table.add_column("Status", style="green")
+
+    summary_table.add_row(
+        "UI Token Synthesizer",
+        str(ui_report.get("changed_color_tokens", 0)) if ui_report else "unavailable",
+        "adapted" if ui_report else "offline"
+    )
+
+    summary_table.add_row(
+        "Input Engine",
+        str(input_report.get("changed_actions", 0)) if input_report else "unavailable",
+        "adapted" if input_report else "offline"
+    )
+
+    summary_table.add_row(
+        "Audio DSP Engine",
+        str(audio_report.get("new_boost_db", 0.0)) + " dB" if audio_report else "unavailable",
+        "adapted" if audio_report else "offline"
+    )
+
+    summary_table.add_row(
+        "Camera Comfort Engine",
+        str(camera_report.get("changed_fields", 0)) if camera_report else "unavailable",
+        "adapted" if camera_report else "offline"
+    )
+
+    console.print(summary_table)
+
+    _print_ui_accessibility_report(ui_report)
+    _print_input_accessibility_report(input_report)
+    _print_audio_accessibility_report(audio_report)
+    _print_camera_accessibility_report(camera_report)
+
+    console.print(
+        "\n[bold green]✅ Accessibility profile applied across all systems.[/bold green]\n"
+        "[bold cyan]Your i3 laptop remained safe. Reality adapted through pure JSON DNA.[/bold cyan]\n"
+    )
+
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -1157,6 +1812,7 @@ cli.add_command(locale) # Day 27 Addition
 cli.add_command(economy) # Day 28 Addition
 cli.add_command(tutorial) # Day 29 Addition
 cli.add_command(chrono) # Day 30 Addition
+cli.add_command(accessibility) # Day 31 Addition
 
 # ==========================================
 # 3. START THE ENGINE
