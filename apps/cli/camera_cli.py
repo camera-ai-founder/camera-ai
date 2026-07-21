@@ -116,6 +116,38 @@ except Exception:
     QuestDNA = None
 
 
+# ==========================================
+# DAY 33 SAFE IMPORTS:
+# The Social Hole / Deterministic Social Matrices.
+# ==========================================
+try:
+    from packages.core.models import (
+        SocialDNA,
+        SocialAction,
+        FactionDNA,
+        RelationshipTensor,
+        SocialRule
+    )
+    from packages.core.social_engine import SocialMatrixEngine
+    from packages.core.brain import (
+        generate_social_dna_report,
+        generate_social_dna,
+        generate_city_social_dna,
+        generate_faction_social_dna
+    )
+except Exception:
+    SocialDNA = None
+    SocialAction = None
+    FactionDNA = None
+    RelationshipTensor = None
+    SocialRule = None
+    SocialMatrixEngine = None
+    generate_social_dna_report = None
+    generate_social_dna = None
+    generate_city_social_dna = None
+    generate_faction_social_dna = None
+
+
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
 supabase = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
@@ -858,6 +890,474 @@ def _quest_print_progress_result(result: dict):
 
         for error in errors:
             console.print(f"[red]- {error}[/red]")
+
+
+# ==========================================
+# DAY 33: SOCIAL CLI HELPERS
+# ==========================================
+
+def _social_demo_payload() -> dict:
+    """
+    Deterministic demo SocialDNA.
+
+    Faction A:
+    - Merchants Guild
+
+    Faction B:
+    - Iron Guard
+    - hostile toward Merchants Guild
+
+    Faction C:
+    - Ashen Choir
+    - mostly neutral toward Merchants Guild
+
+    NPC:
+    - Ivan
+    - allied with Iron Guard
+
+    This demonstrates emergent consequences:
+    If the player helps the Merchants Guild,
+    the Iron Guard may become hostile,
+    and Ivan may refuse interaction because he is allied with the Iron Guard.
+    """
+    return {
+        "factions": [
+            {
+                "faction_id": "faction_merchants_guild",
+                "name": "Merchants Guild",
+                "description": "A trade coalition that values profit and stability.",
+                "values": ["profit", "stability", "contracts"],
+                "goals": ["control trade routes"],
+                "disposition_toward_player": 0.2,
+            },
+            {
+                "faction_id": "faction_iron_guard",
+                "name": "Iron Guard",
+                "description": "A militaristic order that values control and protection.",
+                "values": ["order", "protection", "discipline"],
+                "goals": ["secure the city gates"],
+                "disposition_toward_player": -0.05,
+            },
+            {
+                "faction_id": "faction_ashen_choir",
+                "name": "Ashen Choir",
+                "description": "A secretive religious movement that values revelation.",
+                "values": ["faith", "secrecy", "prophecy"],
+                "goals": ["recover ancient relics"],
+                "disposition_toward_player": 0.0,
+            },
+        ],
+        "relationship_tensors": [
+            {
+                "source_id": "faction_iron_guard",
+                "target_id": "faction_merchants_guild",
+                "weight": -0.8,
+                "relationship_type": "rivalry",
+                "confidence": 0.95,
+                "notes": "The Guard distrusts merchant corruption.",
+            },
+            {
+                "source_id": "faction_merchants_guild",
+                "target_id": "faction_iron_guard",
+                "weight": -0.6,
+                "relationship_type": "rivalry",
+                "confidence": 0.9,
+                "notes": "The Guild resents Guard tariffs.",
+            },
+            {
+                "source_id": "faction_ashen_choir",
+                "target_id": "faction_merchants_guild",
+                "weight": 0.1,
+                "relationship_type": "neutral_trade_contact",
+                "confidence": 0.7,
+                "notes": "The Choir trades relics through the Guild, but remains detached.",
+            },
+            {
+                "source_id": "faction_ashen_choir",
+                "target_id": "faction_iron_guard",
+                "weight": -0.25,
+                "relationship_type": "religious_tension",
+                "confidence": 0.8,
+                "notes": "The Choir sees the Guard as spiritually blind.",
+            },
+            {
+                "source_id": "npc_ivan",
+                "target_id": "faction_iron_guard",
+                "weight": 0.85,
+                "relationship_type": "alliance",
+                "confidence": 0.95,
+                "notes": "Ivan is a loyal former guardsman.",
+            },
+            {
+                "source_id": "faction_iron_guard",
+                "target_id": "player",
+                "weight": -0.05,
+                "relationship_type": "player_disposition",
+                "confidence": 1.0,
+                "notes": "The Guard is slightly suspicious of the player.",
+            },
+            {
+                "source_id": "faction_merchants_guild",
+                "target_id": "player",
+                "weight": 0.2,
+                "relationship_type": "player_disposition",
+                "confidence": 1.0,
+                "notes": "The Guild sees the player as useful.",
+            },
+            {
+                "source_id": "faction_ashen_choir",
+                "target_id": "player",
+                "weight": 0.0,
+                "relationship_type": "player_disposition",
+                "confidence": 1.0,
+                "notes": "The Choir has not judged the player yet.",
+            },
+            {
+                "source_id": "npc_ivan",
+                "target_id": "player",
+                "weight": 0.0,
+                "relationship_type": "stranger",
+                "confidence": 1.0,
+                "notes": "Ivan does not know the player yet.",
+            },
+        ],
+        "social_rules": [
+            {
+                "rule_id": "rule_helping_allies_angers_rivals",
+                "trigger_action": "help",
+                "effect_type": "disposition_change",
+                "magnitude_multiplier": 1.0,
+                "description": "Helping a faction irritates its rivals.",
+            },
+            {
+                "rule_id": "rule_harming_allies_pleases_rivals",
+                "trigger_action": "steal",
+                "effect_type": "disposition_change",
+                "magnitude_multiplier": 1.0,
+                "description": "Harming a faction can please its rivals.",
+            },
+        ],
+        "metadata": {
+            "demo": True,
+            "day": 33,
+        },
+    }
+
+
+def _social_demo_dna():
+    """
+    Build the deterministic demo SocialDNA object.
+    """
+    if SocialDNA is None:
+        return None
+
+    return SocialDNA(**_social_demo_payload())
+
+
+def _social_load_from_file(file_path: str):
+    """
+    Load SocialDNA from a JSON file.
+
+    Accepted formats:
+    1. A raw SocialDNA object.
+    2. {"social_dna": {...SocialDNA...}}
+    """
+    if SocialDNA is None:
+        return None
+
+    if not file_path:
+        return None
+
+    full_path = os.path.abspath(os.path.expanduser(file_path))
+
+    if not os.path.exists(full_path):
+        console.print(f"[red]SocialDNA file not found:[/red] {full_path}")
+        return None
+
+    try:
+        with open(full_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            console.print("[red]SocialDNA JSON root must be an object.[/red]")
+            return None
+
+        payload = data.get("social_dna", data)
+
+        return SocialDNA(**payload)
+
+    except Exception as e:
+        console.print(f"[red]Could not load SocialDNA from file:[/red] {e}")
+        return None
+
+
+def _social_load_active_from_supabase(project_id=None):
+    """
+    Load the master SocialDNA row from Supabase social_matrices.
+
+    Master rows have:
+    player_id IS NULL
+    """
+    if SocialDNA is None:
+        return None
+
+    if not supabase:
+        return None
+
+    if not project_id:
+        project_id = get_active_project_id()
+
+    if not project_id:
+        return None
+
+    try:
+        response = (
+            supabase.table("social_matrices")
+            .select("social_dna")
+            .eq("project_id", project_id)
+            .filter("player_id", "is", "null")
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if response.data and len(response.data) > 0:
+            social_payload = response.data[0].get("social_dna", {})
+            return SocialDNA(**social_payload)
+
+    except Exception as e:
+        console.print(
+            f"[yellow]Warning: Could not load active SocialDNA from Supabase: {e}[/yellow]"
+        )
+
+    return None
+
+
+def _social_load_dna(file_path=None, project_id=None):
+    """
+    Load SocialDNA in this priority order:
+
+    1. Explicit JSON file.
+    2. Active master row from Supabase.
+    3. Deterministic demo society.
+    """
+    if SocialDNA is None:
+        return None, "unavailable"
+
+    if file_path:
+        file_dna = _social_load_from_file(file_path)
+
+        if file_dna is not None:
+            return file_dna, f"file:{file_path}"
+
+        console.print("[yellow]Falling back because file SocialDNA could not be loaded.[/yellow]")
+
+    active_dna = _social_load_active_from_supabase(project_id=project_id)
+
+    if active_dna is not None:
+        return active_dna, "supabase"
+
+    return _social_demo_dna(), "demo"
+
+
+def _social_make_engine(social_dna, actor_id: str = "player"):
+    """
+    Create a Social Matrix Engine with clear demo-friendly propagation settings.
+    """
+    if SocialMatrixEngine is None:
+        return None
+
+    return SocialMatrixEngine(
+        social_dna=social_dna,
+        player_id=actor_id,
+        propagation_strength=1.0,
+        indirect_decay=0.65,
+        refusal_threshold=-0.5,
+        alliance_threshold=0.6,
+    )
+
+
+def _social_entity_name(entity_id: str, social_dna) -> str:
+    """
+    Pretty-print a social entity ID.
+    """
+    if entity_id == "player":
+        return "Player"
+
+    if social_dna is not None:
+        for faction in social_dna.factions:
+            if faction.faction_id == entity_id:
+                return faction.name
+
+    return (
+        str(entity_id)
+        .replace("_", " ")
+        .replace("npc ", "NPC ")
+        .title()
+    )
+
+
+def _social_print_edges(engine, social_dna) -> None:
+    """
+    Print all relationship edges.
+    """
+    if engine is None:
+        console.print("[red]SocialMatrixEngine is unavailable.[/red]")
+        return
+
+    edges = engine.get_edges()
+
+    table = Table(title="Social Relationship Matrix")
+    table.add_column("Source", style="cyan")
+    table.add_column("Target", style="cyan")
+    table.add_column("Weight", style="magenta")
+    table.add_column("Type", style="green")
+    table.add_column("Notes", style="white")
+
+    if not edges:
+        table.add_row("-", "-", "-", "-", "No relationships.")
+        console.print(table)
+        return
+
+    for edge in edges:
+        table.add_row(
+            _social_entity_name(edge.get("source_id", "?"), social_dna),
+            _social_entity_name(edge.get("target_id", "?"), social_dna),
+            f"{float(edge.get('weight', 0.0)):.2f}",
+            str(edge.get("relationship_type", "neutral")),
+            str(edge.get("notes", "")),
+        )
+
+    console.print(table)
+
+
+def _social_print_disposition_table(
+    engine,
+    social_dna,
+    actor_id: str,
+    title: str,
+) -> None:
+    """
+    Print dispositions toward the actor.
+    """
+    if engine is None:
+        console.print("[red]SocialMatrixEngine is unavailable.[/red]")
+        return
+
+    table = Table(title=title)
+    table.add_column("Entity", style="cyan")
+    table.add_column("Disposition Toward Actor", style="magenta")
+    table.add_column("Can Interact With Actor", style="green")
+
+    entity_ids = engine.get_entity_ids()
+
+    for entity_id in entity_ids:
+        if entity_id == actor_id:
+            continue
+
+        weight = engine.get_relationship(entity_id, actor_id)
+        can_interact = engine.can_interact(entity_id, actor_id)
+
+        table.add_row(
+            _social_entity_name(entity_id, social_dna),
+            f"{weight:.2f}",
+            "yes" if can_interact else "no",
+        )
+
+    console.print(table)
+
+
+def _social_print_direct_effects(report: dict, social_dna) -> None:
+    """
+    Print direct consequences of the SocialAction.
+    """
+    direct_effects = report.get("direct_effects", [])
+
+    table = Table(title="Direct Effects")
+    table.add_column("Source", style="cyan")
+    table.add_column("Target", style="cyan")
+    table.add_column("Old", style="yellow")
+    table.add_column("Delta", style="magenta")
+    table.add_column("New", style="green")
+    table.add_column("Reason", style="white")
+
+    if not direct_effects:
+        table.add_row("-", "-", "-", "-", "-", "No direct effect.")
+        console.print(table)
+        return
+
+    for effect in direct_effects:
+        table.add_row(
+            _social_entity_name(effect.get("source_id", "?"), social_dna),
+            _social_entity_name(effect.get("target_id", "?"), social_dna),
+            f"{float(effect.get('old_weight', 0.0)):.2f}",
+            f"{float(effect.get('delta', 0.0)):+.2f}",
+            f"{float(effect.get('new_weight', 0.0)):.2f}",
+            str(effect.get("reason", "")),
+        )
+
+    console.print(table)
+
+
+def _social_print_ripple_effects(report: dict, social_dna) -> None:
+    """
+    Print mathematical ripple consequences.
+    """
+    ripple_effects = report.get("ripple_effects", [])
+
+    table = Table(title="Ripple Effects")
+    table.add_column("Observer", style="cyan")
+    table.add_column("Toward", style="cyan")
+    table.add_column("Influence", style="yellow")
+    table.add_column("Old", style="yellow")
+    table.add_column("Delta", style="magenta")
+    table.add_column("New", style="green")
+
+    if not ripple_effects:
+        table.add_row("-", "-", "-", "-", "-", "No ripple effects.")
+        console.print(table)
+        return
+
+    for effect in ripple_effects:
+        table.add_row(
+            _social_entity_name(effect.get("source_id", "?"), social_dna),
+            _social_entity_name(effect.get("target_id", "?"), social_dna),
+            f"{float(effect.get('influence_score', 0.0)):.2f}",
+            f"{float(effect.get('old_weight', 0.0)):.2f}",
+            f"{float(effect.get('delta', 0.0)):+.2f}",
+            f"{float(effect.get('new_weight', 0.0)):.2f}",
+        )
+
+    console.print(table)
+
+
+def _social_print_interaction_blocks(engine, social_dna) -> None:
+    """
+    Print who refuses interaction with whom.
+    """
+    if engine is None:
+        console.print("[red]SocialMatrixEngine is unavailable.[/red]")
+        return
+
+    blocks = engine.get_interaction_blocks()
+
+    table = Table(title="Interaction Refusals")
+    table.add_column("Source", style="cyan")
+    table.add_column("Refuses Interaction With", style="red")
+
+    if not blocks:
+        table.add_row("-", "No refusals.")
+        console.print(table)
+        return
+
+    for source_id, target_ids in blocks.items():
+        for target_id in target_ids:
+            table.add_row(
+                _social_entity_name(source_id, social_dna),
+                _social_entity_name(target_id, social_dna),
+            )
+
+    console.print(table)
 
 
 # ==========================================
@@ -2385,6 +2885,251 @@ def quest_progress(node_id, quest_id, project_id, completed, force):
         )
 
 
+# ==========================================
+# DAY 33: THE SOCIAL HOLE (SOCIAL MATRICES)
+# ==========================================
+@cli.group()
+def social():
+    """Day 33: Deterministic Social Matrix Commands."""
+    pass
+
+
+@social.command(name="demo")
+def social_demo():
+    """
+    Print the deterministic demo SocialDNA.
+
+    Example:
+    camera social demo
+    """
+    if SocialDNA is None:
+        console.print(
+            "[bold red]Day 33 SocialDNA is not available. "
+            "Check packages/core/models.py.[/bold red]"
+        )
+        return
+
+    dna = _social_demo_dna()
+
+    console.print(
+        Panel(
+            "[cyan]Deterministic Day 33 Demo Society[/cyan]\n"
+            "Faction A: Merchants Guild\n"
+            "Faction B: Iron Guard\n"
+            "Faction C: Ashen Choir\n"
+            "NPC: Ivan, allied with the Iron Guard",
+            title="Day 33: SocialDNA Demo",
+            border_style="cyan"
+        )
+    )
+
+    console.print(
+        Syntax(
+            json.dumps(_to_json_safe(dna), indent=2, default=str),
+            "json",
+            theme="monokai",
+            line_numbers=True
+        )
+    )
+
+
+@social.command(name="matrix")
+@click.option(
+    "--file",
+    "file_path",
+    default=None,
+    help="Optional path to a SocialDNA JSON file."
+)
+@click.option(
+    "--project-id",
+    default=None,
+    help="Optional Supabase project UUID."
+)
+def social_matrix(file_path, project_id):
+    """
+    Print the social matrix edges and dispositions.
+
+    Examples:
+    camera social matrix
+    camera social matrix --file social_dna.json
+    """
+    if SocialDNA is None or SocialMatrixEngine is None:
+        console.print(
+            "[bold red]Day 33 Social Matrix is not available. "
+            "Check packages/core/models.py and packages/core/social_engine.py.[/bold red]"
+        )
+        return
+
+    dna, source = _social_load_dna(
+        file_path=file_path,
+        project_id=project_id
+    )
+
+    if dna is None:
+        console.print("[bold red]Could not load SocialDNA.[/bold red]")
+        return
+
+    engine = _social_make_engine(dna, actor_id="player")
+
+    console.print(
+        Panel(
+            f"[cyan]Social Matrix loaded from:[/cyan] [white]{source}[/white]",
+            title="Day 33: Social Matrix",
+            border_style="cyan"
+        )
+    )
+
+    _social_print_edges(engine, dna)
+    _social_print_disposition_table(
+        engine=engine,
+        social_dna=dna,
+        actor_id="player",
+        title="Player Dispositions",
+    )
+
+
+@social.command(name="ripple")
+@click.argument("action", required=True)
+@click.option(
+    "--actor",
+    default="player",
+    show_default=True,
+    help="The entity performing the action."
+)
+@click.option(
+    "--target",
+    default="faction_merchants_guild",
+    show_default=True,
+    help="The faction or entity receiving the action."
+)
+@click.option(
+    "--magnitude",
+    default=0.8,
+    show_default=True,
+    type=float,
+    help="Strength of the action. Positive or negative."
+)
+@click.option(
+    "--file",
+    "file_path",
+    default=None,
+    help="Optional path to a SocialDNA JSON file."
+)
+@click.option(
+    "--project-id",
+    default=None,
+    help="Optional Supabase project UUID."
+)
+def social_ripple(action, actor, target, magnitude, file_path, project_id):
+    """
+    Simulate a social action and print the mathematical ripple.
+
+    Examples:
+    camera social ripple help
+    camera social ripple help --target faction_merchants_guild --magnitude 0.8
+    camera social ripple steal --target faction_merchants_guild --magnitude -0.7
+    """
+    if SocialDNA is None or SocialAction is None or SocialMatrixEngine is None:
+        console.print(
+            "[bold red]Day 33 Social Ripple Resolver is not available. "
+            "Check packages/core/models.py and packages/core/social_engine.py.[/bold red]"
+        )
+        return
+
+    dna, source = _social_load_dna(
+        file_path=file_path,
+        project_id=project_id
+    )
+
+    if dna is None:
+        console.print("[bold red]Could not load SocialDNA.[/bold red]")
+        return
+
+    engine = _social_make_engine(dna, actor_id=actor)
+
+    if engine is None:
+        console.print("[bold red]SocialMatrixEngine could not be initialized.[/bold red]")
+        return
+
+    console.print(
+        Panel(
+            f"[cyan]SocialDNA source:[/cyan] [white]{source}[/white]\n"
+            f"Action: [bold]{action}[/bold]\n"
+            f"Actor: [cyan]{actor}[/cyan]\n"
+            f"Target: [cyan]{target}[/cyan]\n"
+            f"Magnitude: [magenta]{magnitude:+.2f}[/magenta]",
+            title="Day 33: Social Ripple Resolver",
+            border_style="cyan"
+        )
+    )
+
+    if target not in engine.get_entity_ids():
+        console.print(
+            f"[yellow]Target '{target}' is not in the loaded society. "
+            f"The Social Engine will add it as a new entity.[/yellow]"
+        )
+
+    _social_print_disposition_table(
+        engine=engine,
+        social_dna=dna,
+        actor_id=actor,
+        title="Before Action",
+    )
+
+    social_action = SocialAction(
+        actor_id=actor,
+        target_id=target,
+        action_type=action,
+        magnitude=magnitude,
+        context={
+            "source": "camera_cli",
+            "day": 33,
+        },
+    )
+
+    report = engine.apply_action(social_action)
+
+    _social_print_direct_effects(report, dna)
+    _social_print_ripple_effects(report, dna)
+
+    _social_print_disposition_table(
+        engine=engine,
+        social_dna=dna,
+        actor_id=actor,
+        title="After Action",
+    )
+
+    _social_print_interaction_blocks(engine, dna)
+
+    # ==================================================
+    # SPECIAL DEMO CHECK
+    # ==================================================
+    # If the demo society is active, show the emergent Ivan refusal.
+    # ==================================================
+    if engine.get_faction("faction_iron_guard") is not None:
+        ivan_can_interact = engine.can_interact("npc_ivan", actor)
+        guard_disposition = engine.get_relationship("faction_iron_guard", actor)
+
+        if ivan_can_interact:
+            console.print(
+                "[green]NPC Ivan is still willing to interact with the actor.[/green]"
+            )
+        else:
+            console.print(
+                "[red]NPC Ivan now refuses interaction with the actor.[/red]"
+            )
+
+        console.print(
+            f"[cyan]Iron Guard disposition toward actor:[/cyan] "
+            f"[magenta]{guard_disposition:.2f}[/magenta]"
+        )
+
+    console.print(
+        "\n[bold green]✅ Social ripple complete.[/bold green]\n"
+        "[bold cyan]Drama emerged from math. Zero hardcoded reputation. Your i3 laptop is safe.[/bold cyan]\n"
+    )
+
+
 # CRITICAL: Add the new command groups to the main 'cli' group!
 cli.add_command(biome)
 cli.add_command(navigate)
@@ -2400,6 +3145,7 @@ cli.add_command(tutorial) # Day 29 Addition
 cli.add_command(chrono) # Day 30 Addition
 cli.add_command(accessibility) # Day 31 Addition
 cli.add_command(quest) # Day 32 Addition
+cli.add_command(social) # Day 33 Addition
 
 # ==========================================
 # 3. START THE ENGINE

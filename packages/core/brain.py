@@ -9,7 +9,7 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# DAY 11 to DAY 32 IMPORTS: The Blueprints
+# DAY 11 to DAY 33 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState,
@@ -44,7 +44,12 @@ from .models import (
     AdaptationEvent,
     TelemetryDNA,
     PerformanceReport,
-    QuestDNA
+    QuestDNA,
+    SocialDNA,
+    FactionDNA,
+    RelationshipTensor,
+    SocialRule,
+    SocialAction
 )
 
 # ==========================================
@@ -70,6 +75,18 @@ except ImportError:
         from packages.core.narrative_engine import NarrativeEngine
     except ImportError:
         NarrativeEngine = None
+
+# ==========================================
+# DAY 33 IMPORT:
+# The Social Engine validates SocialDNA as a living matrix.
+# ==========================================
+try:
+    from .social_engine import SocialMatrixEngine
+except ImportError:
+    try:
+        from packages.core.social_engine import SocialMatrixEngine
+    except ImportError:
+        SocialMatrixEngine = None
 
 # ==========================================
 # DAY 22 STEP 5: THE SECURITY GUARDRAILS
@@ -2279,4 +2296,822 @@ def progress_quest_node(
         condition_context=condition_context,
         force=force,
         update_world_state_fn=_update_world_state
+    )
+
+
+# ==========================================
+# DAY 33: THE SOCIOLOGIST DIRECTOR (SOCIAL HOLE)
+# ==========================================
+# The Sociologist Director generates SocialDNA.
+#
+# It NEVER writes:
+# - static dialogue trees
+# - hardcoded reputation numbers
+# - scripted faction reactions
+# - raw quest text
+#
+# It outputs only:
+# - factions
+# - weighted relationship tensors
+# - social ripple rules
+#
+# The Social Engine then computes consequences deterministically.
+# ==========================================
+
+SOCIOLOGIST_DIRECTOR_SYSTEM_PROMPT = f"""
+You are the Sociologist Director inside the Ontological Genesis Engine.
+
+Your job is to generate SocialDNA.
+
+ABSOLUTE RULES:
+1. Output ONLY valid JSON.
+2. Do NOT output markdown.
+3. Do NOT output explanations.
+4. Do NOT output raw dialogue.
+5. Do NOT output hardcoded reputation numbers like "+5 reputation".
+6. Do NOT output static faction reaction scripts.
+7. Society must be expressed as a weighted mathematical graph.
+8. Factions are social nodes.
+9. Relationship tensors are weighted directed edges.
+10. Social rules define how actions ripple through society.
+11. Relationship weights must be between -1.0 and +1.0.
+12. -1.0 means hatred or hostility.
+13. 0.0 means neutral.
+14. +1.0 means alliance or deep trust.
+15. The player entity ID is usually "player".
+16. Faction IDs must be stable snake_case strings.
+17. Respect the World Truths. Do not contradict them.
+
+Return JSON using this exact shape:
+
+{{
+  "factions": [
+    {{
+      "faction_id": "faction_merchants_guild",
+      "name": "Merchants Guild",
+      "description": "A trade faction that values profit and stability.",
+      "values": ["profit", "stability"],
+      "goals": ["control trade routes"],
+      "disposition_toward_player": 0.0,
+      "metadata": {{}}
+    }}
+  ],
+  "relationship_tensors": [
+    {{
+      "source_id": "faction_merchants_guild",
+      "target_id": "faction_iron_guard",
+      "weight": -0.6,
+      "relationship_type": "rivalry",
+      "confidence": 1.0,
+      "notes": "Trade disputes created tension.",
+      "metadata": {{}}
+    }}
+  ],
+  "social_rules": [
+    {{
+      "rule_id": "rule_helping_allies_angers_rivals",
+      "trigger_action": "help",
+      "source_faction_id": null,
+      "target_faction_id": null,
+      "effect_type": "disposition_change",
+      "magnitude_multiplier": 1.0,
+      "description": "Helping a faction irritates its rivals.",
+      "metadata": {{}}
+    }}
+  ],
+  "metadata": {{}}
+}}
+
+{SECURITY_GUARDRAILS_PROMPT}
+""".strip()
+
+
+def _slug(text: str) -> str:
+    """
+    Create a stable snake_case ID from text.
+    """
+    text = str(text or "").strip().lower()
+
+    if not text:
+        return "entity"
+
+    cleaned: List[str] = []
+
+    for char in text:
+        if char.isalnum() or char in ("_", "-"):
+            cleaned.append(char)
+        else:
+            cleaned.append("_")
+
+    slug = "".join(cleaned)
+
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+
+    slug = slug.strip("_")
+
+    return slug or "entity"
+
+
+def _clamp_social_weight(value: Any) -> float:
+    """
+    Clamp social relationship weights to the safe range.
+    """
+    try:
+        return max(-1.0, min(1.0, float(value)))
+    except Exception:
+        return 0.0
+
+
+def _clamp_social_confidence(value: Any) -> float:
+    """
+    Clamp confidence to the safe range.
+    """
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except Exception:
+        return 1.0
+
+
+def _clamp_rule_multiplier(value: Any) -> float:
+    """
+    Clamp social rule multipliers to prevent chaotic escalation.
+    """
+    try:
+        return max(-5.0, min(5.0, float(value)))
+    except Exception:
+        return 1.0
+
+
+def _normalize_social_payload(data: Any, faction_count: int = 3) -> Dict[str, Any]:
+    """
+    Normalize raw AI JSON into safe SocialDNA-shaped data.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("SocialDNA JSON root must be an object.")
+
+    wrapper_keys = (
+        "social",
+        "social_dna",
+        "SocialDNA",
+        "data",
+        "result"
+    )
+
+    for key in wrapper_keys:
+        if key in data and isinstance(data[key], dict):
+            data = data[key]
+            break
+
+    factions = data.get("factions", [])
+
+    if not isinstance(factions, list):
+        factions = []
+
+    normalized_factions: List[Dict[str, Any]] = []
+
+    for index, faction in enumerate(factions):
+        if not isinstance(faction, dict):
+            continue
+
+        name = str(faction.get("name", "") or "").strip()
+
+        if not name:
+            name = f"Faction {index + 1}"
+
+        faction_id = str(faction.get("faction_id", "") or "").strip()
+
+        if not faction_id:
+            faction_id = f"faction_{_slug(name)}"
+
+        faction["name"] = name
+        faction["faction_id"] = faction_id
+
+        if not isinstance(faction.get("values"), list):
+            faction["values"] = []
+
+        if not isinstance(faction.get("goals"), list):
+            faction["goals"] = []
+
+        faction["disposition_toward_player"] = _clamp_social_weight(
+            faction.get("disposition_toward_player", 0.0)
+        )
+
+        if not isinstance(faction.get("metadata"), dict):
+            faction["metadata"] = {}
+
+        normalized_factions.append(faction)
+
+    data["factions"] = normalized_factions
+
+    relationships = data.get("relationship_tensors", [])
+
+    if not isinstance(relationships, list):
+        relationships = []
+
+    normalized_relationships: List[Dict[str, Any]] = []
+
+    for relationship in relationships:
+        if not isinstance(relationship, dict):
+            continue
+
+        source_id = str(
+            relationship.get("source_id")
+            or relationship.get("source")
+            or relationship.get("from")
+            or ""
+        ).strip()
+
+        target_id = str(
+            relationship.get("target_id")
+            or relationship.get("target")
+            or relationship.get("to")
+            or ""
+        ).strip()
+
+        if not source_id or not target_id:
+            continue
+
+        if source_id == target_id:
+            continue
+
+        relationship["source_id"] = source_id
+        relationship["target_id"] = target_id
+        relationship["weight"] = _clamp_social_weight(relationship.get("weight", 0.0))
+        relationship["confidence"] = _clamp_social_confidence(
+            relationship.get("confidence", 1.0)
+        )
+
+        if not relationship.get("relationship_type"):
+            relationship["relationship_type"] = "neutral"
+
+        if not isinstance(relationship.get("metadata"), dict):
+            relationship["metadata"] = {}
+
+        normalized_relationships.append(relationship)
+
+    data["relationship_tensors"] = normalized_relationships
+
+    rules = data.get("social_rules", [])
+
+    if not isinstance(rules, list):
+        rules = []
+
+    normalized_rules: List[Dict[str, Any]] = []
+
+    for index, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            continue
+
+        if not rule.get("rule_id"):
+            rule["rule_id"] = f"rule_{index + 1}"
+
+        if not rule.get("trigger_action"):
+            rule["trigger_action"] = "*"
+
+        if not rule.get("effect_type"):
+            rule["effect_type"] = "disposition_change"
+
+        rule["magnitude_multiplier"] = _clamp_rule_multiplier(
+            rule.get("magnitude_multiplier", 1.0)
+        )
+
+        if not isinstance(rule.get("metadata"), dict):
+            rule["metadata"] = {}
+
+        normalized_rules.append(rule)
+
+    if not normalized_rules:
+        normalized_rules.append(
+            {
+                "rule_id": "rule_social_ripple_default",
+                "trigger_action": "*",
+                "source_faction_id": None,
+                "target_faction_id": None,
+                "effect_type": "disposition_change",
+                "magnitude_multiplier": 1.0,
+                "description": "Actions ripple through society based on relationship weights.",
+                "metadata": {},
+            }
+        )
+
+    data["social_rules"] = normalized_rules
+
+    if not isinstance(data.get("metadata"), dict):
+        data["metadata"] = {}
+
+    data["metadata"]["requested_faction_count"] = faction_count
+
+    return data
+
+
+def _sanitize_social_dna(social_dna: SocialDNA) -> SocialDNA:
+    """
+    Protect SocialDNA from invalid or missing pieces after validation.
+    """
+    if social_dna.factions is None:
+        social_dna.factions = []
+
+    if social_dna.relationship_tensors is None:
+        social_dna.relationship_tensors = []
+
+    if social_dna.social_rules is None:
+        social_dna.social_rules = []
+
+    seen_faction_ids: set = set()
+    clean_factions: List[FactionDNA] = []
+
+    for index, faction in enumerate(social_dna.factions):
+        if not getattr(faction, "faction_id", None):
+            faction.faction_id = _slug(
+                getattr(faction, "name", "") or f"faction_{index + 1}"
+            )
+
+        if faction.faction_id in seen_faction_ids:
+            faction.faction_id = f"{faction.faction_id}_{index + 1}"
+
+        seen_faction_ids.add(faction.faction_id)
+
+        faction.disposition_toward_player = _clamp_social_weight(
+            faction.disposition_toward_player
+        )
+
+        clean_factions.append(faction)
+
+    social_dna.factions = clean_factions
+
+    clean_relationships: List[RelationshipTensor] = []
+
+    for relationship in social_dna.relationship_tensors:
+        source_id = str(getattr(relationship, "source_id", "") or "").strip()
+        target_id = str(getattr(relationship, "target_id", "") or "").strip()
+
+        if not source_id or not target_id:
+            continue
+
+        if source_id == target_id:
+            continue
+
+        relationship.source_id = source_id
+        relationship.target_id = target_id
+        relationship.weight = _clamp_social_weight(relationship.weight)
+        relationship.confidence = _clamp_social_confidence(relationship.confidence)
+
+        clean_relationships.append(relationship)
+
+    social_dna.relationship_tensors = clean_relationships
+
+    clean_rules: List[SocialRule] = []
+
+    for index, rule in enumerate(social_dna.social_rules):
+        if not getattr(rule, "rule_id", None):
+            rule.rule_id = f"rule_{index + 1}"
+
+        if not getattr(rule, "trigger_action", None):
+            rule.trigger_action = "*"
+
+        if not getattr(rule, "effect_type", None):
+            rule.effect_type = "disposition_change"
+
+        rule.magnitude_multiplier = _clamp_rule_multiplier(rule.magnitude_multiplier)
+
+        clean_rules.append(rule)
+
+    if not clean_rules:
+        clean_rules.append(
+            SocialRule(
+                rule_id="rule_social_ripple_default",
+                trigger_action="*",
+                source_faction_id=None,
+                target_faction_id=None,
+                effect_type="disposition_change",
+                magnitude_multiplier=1.0,
+                description="Actions ripple through society based on relationship weights.",
+            )
+        )
+
+    social_dna.social_rules = clean_rules
+
+    if social_dna.metadata is None:
+        social_dna.metadata = {}
+
+    social_dna.metadata["sanitized_by_brain"] = True
+
+    return social_dna
+
+
+def _fallback_social_dna(
+    context: str,
+    faction_count: int = 3,
+    seed: Optional[str] = None
+) -> SocialDNA:
+    """
+    Deterministic fallback society.
+
+    This protects the Founder's peace if Groq is unavailable.
+    """
+    faction_count = max(1, min(int(faction_count), 5))
+
+    base_factions = [
+        "Merchants Guild",
+        "Iron Guard",
+        "Ashen Choir",
+        "Dockworkers Union",
+        "Old Council",
+    ]
+
+    factions: List[FactionDNA] = []
+
+    for index in range(faction_count):
+        name = base_factions[index % len(base_factions)]
+        faction_id = f"faction_{_slug(name)}"
+
+        factions.append(
+            FactionDNA(
+                faction_id=faction_id,
+                name=name,
+                description="Procedural fallback faction.",
+                values=["stability", "survival"],
+                goals=["protect their interests"],
+                disposition_toward_player=0.0,
+            )
+        )
+
+    relationships: List[RelationshipTensor] = []
+
+    for i, source in enumerate(factions):
+        for j, target in enumerate(factions):
+            if i == j:
+                continue
+
+            if (i + j) % 2 == 0:
+                weight = -0.6
+                relationship_type = "rivalry"
+            else:
+                weight = 0.4
+                relationship_type = "cautious_alliance"
+
+            relationships.append(
+                RelationshipTensor(
+                    source_id=source.faction_id,
+                    target_id=target.faction_id,
+                    weight=weight,
+                    relationship_type=relationship_type,
+                    confidence=0.8,
+                    notes="Deterministic fallback relationship.",
+                )
+            )
+
+    rules = [
+        SocialRule(
+            rule_id="rule_fallback_ripple",
+            trigger_action="*",
+            source_faction_id=None,
+            target_faction_id=None,
+            effect_type="disposition_change",
+            magnitude_multiplier=1.0,
+            description="Actions ripple through fallback society relationships.",
+        )
+    ]
+
+    return SocialDNA(
+        factions=factions,
+        relationship_tensors=relationships,
+        social_rules=rules,
+        metadata={
+            "fallback": True,
+            "seed": seed,
+            "context": str(context)[:500],
+        },
+    )
+
+
+def generate_social_dna_report(
+    context: Optional[str] = None,
+    faction_count: int = 3,
+    seed: Optional[str] = None,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> Dict[str, Any]:
+    """
+    Generate SocialDNA using:
+    1. Day 11 World State
+    2. Day 13 Context Pruning / World Truths
+    3. Groq JSON forcing
+    4. Pydantic validation
+    5. Day 33 Social Matrix validation
+    6. Self-correction loop
+    """
+    faction_count = max(1, min(int(faction_count), 6))
+
+    if not client:
+        fallback = _fallback_social_dna(
+            context=context or "A procedural fallback society.",
+            faction_count=faction_count,
+            seed=seed
+        )
+
+        return {
+            "success": False,
+            "social_dna": fallback,
+            "social_json": fallback.model_dump(),
+            "matrix_summary": None,
+            "attempts": 0,
+            "raw_response": "",
+            "errors": ["Groq client is not initialized. Used deterministic fallback."]
+        }
+
+    if project_id is None:
+        project_id = get_latest_project_id()
+
+    if world_state is None:
+        world_state = get_world_state(project_id)
+
+    if hasattr(world_state, "model_dump"):
+        state_payload = world_state.model_dump()
+    elif isinstance(world_state, dict):
+        state_payload = world_state
+    else:
+        state_payload = {"world_state": str(world_state)}
+
+    raw_state_json = json.dumps(state_payload, default=str)
+    world_truths = summarize_state(raw_state_json)
+
+    truths_string = "\n".join([f"- {truth}" for truth in world_truths])
+
+    state_summary = (
+        f"Heat Level: {state_payload.get('heat_level', 0)} | "
+        f"Time of Day: {state_payload.get('time_of_day', '12:00')}"
+    )
+
+    intent_text = (
+        context
+        if context
+        else "Generate a living society with meaningful faction tensions and alliances."
+    )
+
+    user_message = f"""
+World Truths:
+{truths_string}
+
+Current World State Summary:
+{state_summary}
+
+Society Request:
+{intent_text}
+
+Requested faction count:
+{faction_count}
+
+Seed:
+{seed or "unseeded"}
+
+Generate a new SocialDNA object.
+
+Remember:
+- Factions are mathematical social nodes.
+- Relationships are weighted edges between -1.0 and +1.0.
+- Do not write dialogue.
+- Do not hardcode reputation numbers.
+- Do not write scripted reactions.
+- Output only valid JSON.
+""".strip()
+
+    messages = [
+        {"role": "system", "content": SOCIOLOGIST_DIRECTOR_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message}
+    ]
+
+    errors: List[str] = []
+    last_raw_response = ""
+    last_error = ""
+    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    for attempt in range(1, 4):
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=0.7,
+                max_tokens=2000
+            )
+
+            raw_json = response.choices[0].message.content
+            last_raw_response = raw_json
+
+            data = json.loads(raw_json)
+            data = _normalize_social_payload(data, faction_count=faction_count)
+
+            social_dna = SocialDNA(**data)
+            social_dna = _sanitize_social_dna(social_dna)
+
+            if not social_dna.factions:
+                raise ValueError("SocialDNA must contain at least one faction.")
+
+            matrix_summary = None
+
+            if SocialMatrixEngine is not None:
+                try:
+                    engine = SocialMatrixEngine(social_dna=social_dna)
+                    matrix_summary = engine.summary()
+                except Exception as matrix_error:
+                    raise ValueError(
+                        f"SocialDNA failed Social Matrix validation: {matrix_error}"
+                    )
+
+            print("Sociologist Director generated flawless SocialDNA!")
+
+            return {
+                "success": True,
+                "social_dna": social_dna,
+                "social_json": social_dna.model_dump(),
+                "matrix_summary": matrix_summary,
+                "attempts": attempt,
+                "raw_response": raw_json,
+                "errors": []
+            }
+
+        except Exception as e:
+            last_error = str(e)
+            errors.append(last_error)
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": last_raw_response or "{}"
+                }
+            )
+
+            correction_message = f"""
+Your previous SocialDNA output was invalid.
+
+Error:
+{last_error}
+
+Regenerate the SocialDNA again.
+
+Rules:
+- Output ONLY valid JSON.
+- No markdown.
+- No explanations.
+- No raw dialogue.
+- No hardcoded reputation numbers.
+- Relationship weights must be between -1.0 and +1.0.
+- Every faction must have faction_id and name.
+- Every relationship must have source_id and target_id.
+- Use the exact SocialDNA schema.
+""".strip()
+
+            messages.append(
+                {
+                    "role": "user",
+                    "content": correction_message
+                }
+            )
+
+    print("Sociologist Director failed after 3 attempts. Using deterministic fallback.")
+
+    fallback = _fallback_social_dna(
+        context=context or "A procedural fallback society.",
+        faction_count=faction_count,
+        seed=seed
+    )
+
+    matrix_summary = None
+
+    if SocialMatrixEngine is not None:
+        try:
+            engine = SocialMatrixEngine(social_dna=fallback)
+            matrix_summary = engine.summary()
+        except Exception:
+            matrix_summary = None
+
+    return {
+        "success": False,
+        "social_dna": fallback,
+        "social_json": fallback.model_dump(),
+        "matrix_summary": matrix_summary,
+        "attempts": 3,
+        "raw_response": last_raw_response,
+        "errors": errors
+    }
+
+
+def generate_social_dna(
+    context: Optional[str] = None,
+    faction_count: int = 3,
+    seed: Optional[str] = None,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> SocialDNA:
+    """
+    Convenience wrapper.
+
+    Always returns a safe SocialDNA object.
+    """
+    report = generate_social_dna_report(
+        context=context,
+        faction_count=faction_count,
+        seed=seed,
+        project_id=project_id,
+        world_state=world_state
+    )
+
+    social_dna = report.get("social_dna")
+
+    if social_dna is None:
+        return _fallback_social_dna(
+            context=context or "A procedural fallback society.",
+            faction_count=faction_count,
+            seed=seed
+        )
+
+    return social_dna
+
+
+def act_as_sociologist_director(
+    context: Optional[str] = None,
+    faction_count: int = 3,
+    seed: Optional[str] = None,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> SocialDNA:
+    """
+    Friendly alias for the Sociologist Director.
+    """
+    return generate_social_dna(
+        context=context,
+        faction_count=faction_count,
+        seed=seed,
+        project_id=project_id,
+        world_state=world_state
+    )
+
+
+def generate_city_social_dna(
+    city_name: str,
+    description: str = "",
+    faction_count: int = 3,
+    seed: Optional[str] = None,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> SocialDNA:
+    """
+    Generate the social web for a city.
+    """
+    context = f"City: {city_name}\nDescription: {description}".strip()
+
+    return generate_social_dna(
+        context=context,
+        faction_count=faction_count,
+        seed=seed,
+        project_id=project_id,
+        world_state=world_state
+    )
+
+
+def generate_faction_social_dna(
+    faction_name: str,
+    city_context: str = "",
+    existing_faction_names: Optional[List[str]] = None,
+    seed: Optional[str] = None,
+    project_id: Optional[str] = None,
+    world_state: Optional[WorldState] = None
+) -> SocialDNA:
+    """
+    Generate or integrate a faction into a social web.
+    """
+    existing = existing_faction_names or []
+
+    context_lines = [
+        f"New faction: {faction_name}",
+    ]
+
+    if city_context:
+        context_lines.append(f"City context: {city_context}")
+
+    if existing:
+        context_lines.append(
+            "Existing factions to relate to: "
+            + ", ".join(existing)
+        )
+
+    context_lines.append(
+        "Generate a SocialDNA graph that integrates this faction into the society."
+    )
+
+    context = "\n".join(context_lines)
+
+    faction_count = 1 + len(existing)
+
+    if faction_count < 2:
+        faction_count = 2
+
+    return generate_social_dna(
+        context=context,
+        faction_count=faction_count,
+        seed=seed,
+        project_id=project_id,
+        world_state=world_state
     )

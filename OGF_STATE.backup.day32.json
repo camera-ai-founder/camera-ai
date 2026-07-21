@@ -1,3 +1,6 @@
+cp OGF_STATE.json OGF_STATE.backup.day32.json || true
+
+cat > OGF_STATE.json <<'EOF'
 {
   "day": 33,
   "current_day": 33,

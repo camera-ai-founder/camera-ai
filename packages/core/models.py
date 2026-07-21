@@ -518,6 +518,259 @@ class QuestDNA(BaseModel):
     )
 
 # ==========================================================
+# DAY 33: THE SOCIAL HOLE (DETERMINISTIC SOCIAL MATRICES)
+# ==========================================================
+# This is the Social Matrix DNA.
+#
+# We NEVER hardcode "+5 reputation" or static faction reactions.
+# The Brain outputs SocialDNA.
+# The Social Engine reads this DNA as a weighted mathematical graph:
+#   - FactionDNA = a social node
+#   - RelationshipTensor = a weighted edge between social nodes
+#   - SocialRule = a deterministic ripple rule
+#   - SocialAction = the event that sends a ripple through the matrix
+#
+# Drama emerges from math.
+# ==========================================================
+
+class FactionDNA(BaseModel):
+    """
+    A social group inside the Social Matrix.
+
+    A faction can be:
+    - a guild
+    - a city
+    - a family
+    - a corporation
+    - a religion
+    - a crew
+    - a government
+    - a secret society
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    faction_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique ID for this faction."
+    )
+
+    name: str = Field(
+        ...,
+        description="The name of the faction."
+    )
+
+    description: str = Field(
+        default="",
+        description="A short semantic description of the faction."
+    )
+
+    values: List[str] = Field(
+        default_factory=list,
+        description="What the faction believes in."
+    )
+
+    goals: List[str] = Field(
+        default_factory=list,
+        description="What the faction wants."
+    )
+
+    disposition_toward_player: float = Field(
+        default=0.0,
+        description="-1.0 means hostile, 0.0 means neutral, +1.0 means allied."
+    )
+
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra deterministic faction memory."
+    )
+
+
+class RelationshipTensor(BaseModel):
+    """
+    A weighted relationship edge between two social entities.
+
+    weight meaning:
+    -1.0 = hatred / hostility
+     0.0 = neutral
+    +1.0 = alliance / deep trust
+
+    This replaces hardcoded reputation numbers.
+    Society becomes a mathematical graph.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    source_id: str = Field(
+        ...,
+        description="The entity or faction where this relationship starts."
+    )
+
+    target_id: str = Field(
+        ...,
+        description="The entity or faction where this relationship points."
+    )
+
+    weight: float = Field(
+        default=0.0,
+        description="The mathematical disposition from source to target."
+    )
+
+    relationship_type: str = Field(
+        default="neutral",
+        description="Examples: alliance, rivalry, debt, trade, religious_tension."
+    )
+
+    confidence: float = Field(
+        default=1.0,
+        description="How stable or certain this relationship is."
+    )
+
+    notes: str = Field(
+        default="",
+        description="Optional semantic note for the Brain."
+    )
+
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra deterministic relationship memory."
+    )
+
+
+class SocialRule(BaseModel):
+    """
+    A deterministic rule for how actions ripple through society.
+
+    Example:
+    If player helps Faction A,
+    factions hostile to Faction A reduce disposition toward player.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    rule_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique ID for this social rule."
+    )
+
+    trigger_action: str = Field(
+        default="*",
+        description="The SocialAction type this rule responds to. Use '*' for all actions."
+    )
+
+    source_faction_id: Optional[str] = Field(
+        default=None,
+        description="Optional faction this rule specifically applies to."
+    )
+
+    target_faction_id: Optional[str] = Field(
+        default=None,
+        description="Optional target faction this rule specifically applies to."
+    )
+
+    effect_type: str = Field(
+        default="disposition_change",
+        description="The type of mathematical effect, e.g., disposition_change, trade_block, dialogue_lock."
+    )
+
+    magnitude_multiplier: float = Field(
+        default=1.0,
+        description="How strongly this rule amplifies or dampens the ripple."
+    )
+
+    description: str = Field(
+        default="",
+        description="Human-readable explanation for the Brain and Founder."
+    )
+
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra deterministic rule memory."
+    )
+
+
+class SocialDNA(BaseModel):
+    """
+    The complete Social Matrix DNA.
+
+    This is the living society graph.
+    Factions are nodes.
+    Relationship tensors are weighted edges.
+    Social rules define how actions ripple through the web.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    factions: List[FactionDNA] = Field(
+        default_factory=list,
+        description="All factions inside this society."
+    )
+
+    relationship_tensors: List[RelationshipTensor] = Field(
+        default_factory=list,
+        description="Weighted relationships between factions, NPCs, and the player."
+    )
+
+    social_rules: List[SocialRule] = Field(
+        default_factory=list,
+        description="Deterministic rules that govern how actions ripple through society."
+    )
+
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra deterministic society memory."
+    )
+
+
+class SocialAction(BaseModel):
+    """
+    A single social event performed by an actor.
+
+    Examples:
+    - player helps Faction A
+    - player steals from merchant
+    - player completes guild quest
+    - player betrays ally
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    actor_id: str = Field(
+        ...,
+        description="The ID of the actor performing the action."
+    )
+
+    target_id: str = Field(
+        ...,
+        description="The ID of the faction, NPC, or group being affected."
+    )
+
+    action_type: str = Field(
+        ...,
+        description="The semantic action, e.g., help, steal, betray, donate, insult."
+    )
+
+    magnitude: float = Field(
+        default=0.1,
+        description="How strong the action is. Positive or negative intensity."
+    )
+
+    context: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra context for the Social Engine."
+    )
+
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="The exact time the social action occurred."
+    )
+
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra deterministic action memory."
+    )
+
+# ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
 # ==========================================================
 class OntologicalNode(BaseModel):
@@ -582,6 +835,10 @@ class AppDNA(BaseModel):
     # DAY 32: The Quest Hole.
     # Procedural narrative graphs are now part of the master DNA.
     quests: List[QuestDNA] = Field(default_factory=list)
+
+    # DAY 33: The Social Hole.
+    # Emerent relationships and deterministic social matrices are now part of the master DNA.
+    social: SocialDNA = Field(default_factory=SocialDNA)
 
 # ==========================================================
 # DAY 12, 15, 16, 17, 18, 20, 21 & 22 RESTORATION
