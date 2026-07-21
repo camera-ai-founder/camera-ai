@@ -1,11 +1,11 @@
 # packages/core/models.py
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Literal, Union, Any
+from typing import Optional, List, Dict, Literal, Union, Any, Tuple
 from enum import Enum
 import uuid
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ==========================================================
 # 1. PROCEDURAL PRIMITIVES & MATERIALS
@@ -306,469 +306,122 @@ class MasteryEvent(BaseModel):
 # ==========================================================
 # DAY 31: THE ACCESSIBILITY HOLE (EMPATHETIC ADAPTATION)
 # ==========================================================
-# This is the Cognitive & Motor Adaptation Engine DNA.
-#
-# We NEVER hardcode accessibility settings.
-# The Brain outputs AccessibilityDNA.
-# Every engine reads this DNA and mathematically adapts reality:
-#   - UI spacing and contrast
-#   - input timing windows
-#   - audio cue amplification
-#   - camera motion comfort
-#   - tutorial pacing
-#
-# Accessibility becomes pure, reactive, deterministic data.
-# ==========================================================
-
 class AccessibilityDNA(BaseModel):
-    """
-    The Empathy DNA.
-
-    This describes the player's current comfort needs without touching
-    raw CSS, raw input code, raw audio code, or raw camera code.
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    cognitive_load_level: Literal[
-        "minimal",
-        "balanced",
-        "supported",
-        "max_support"
-    ] = Field(
-        default="balanced",
-        description="How much mental load the experience should place on the player."
-    )
-
-    motor_assist_mode: Literal[
-        "standard",
-        "generous_timing",
-        "max_assist"
-    ] = Field(
-        default="standard",
-        description="How generous input timing windows should be for motor comfort."
-    )
-
-    visual_contrast_profile: Literal[
-        "standard",
-        "high_contrast"
-    ] = Field(
-        default="standard",
-        description="The visual contrast reality the UI Token Synthesizer should compile."
-    )
-
-    audio_cue_amplification: Literal[
-        "off",
-        "low",
-        "medium",
-        "high"
-    ] = Field(
-        default="off",
-        description="How strongly critical audio cues should be amplified."
-    )
-
-    camera_comfort_mode: Literal[
-        "standard",
-        "reduced_motion",
-        "stable_only"
-    ] = Field(
-        default="standard",
-        description="How the camera should move to prevent motion sickness while preserving emotional intent."
-    )
-
+    cognitive_load_level: Literal["minimal", "balanced", "supported", "max_support"] = Field(default="balanced", description="How much mental load the experience should place on the player.")
+    motor_assist_mode: Literal["standard", "generous_timing", "max_assist"] = Field(default="standard", description="How generous input timing windows should be for motor comfort.")
+    visual_contrast_profile: Literal["standard", "high_contrast"] = Field(default="standard", description="The visual contrast reality the UI Token Synthesizer should compile.")
+    audio_cue_amplification: Literal["off", "low", "medium", "high"] = Field(default="off", description="How strongly critical audio cues should be amplified.")
+    camera_comfort_mode: Literal["standard", "reduced_motion", "stable_only"] = Field(default="standard", description="How the camera should move to prevent motion sickness while preserving emotional intent.")
 
 class AdaptationEvent(BaseModel):
-    """
-    A deterministic record that a system adapted to the player's needs.
-
-    Example:
-    {
-        "trigger_type": "cognitive_load_threshold",
-        "adapted_system": "tutorial_engine",
-        "timestamp": "2026-07-19T00:00:00"
-    }
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    trigger_type: str = Field(
-        ...,
-        description="Why the adaptation happened, e.g., 'cognitive_load_threshold', 'manual_preference', 'telemetry_struggle'."
-    )
-
-    adapted_system: str = Field(
-        ...,
-        description="The system that changed, e.g., 'input_engine', 'ui_token_synthesizer', 'camera_cinematographer'."
-    )
-
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="The exact time the adaptation occurred."
-    )
+    trigger_type: str = Field(..., description="Why the adaptation happened.")
+    adapted_system: str = Field(..., description="The system that changed.")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="The exact time the adaptation occurred.")
 
 # ==========================================================
 # DAY 32: THE QUEST HOLE (PROCEDURAL NARRATIVE GRAPHS)
 # ==========================================================
-# This is the Procedural Narrative Graph DNA.
-#
-# We NEVER hardcode branching dialogue trees or quest scripts.
-# The Brain outputs QuestDNA.
-# The Narrative Engine reads this DNA as a mathematical graph:
-#   - NarrativeNode = a story beat / semantic concept
-#   - NarrativeEdge = a one-way logical connection
-#   - QuestDNA = the full graph plus world mutations
-#
-# The story is computed, not written.
-# ==========================================================
-
 class NarrativeNode(BaseModel):
-    """
-    A single story beat inside the narrative graph.
-
-    Example:
-    {
-        "node_id": "node_enter_ruins",
-        "semantic_concept": "player_discovers_the_old_world_ruins",
-        "completion_condition": {
-            "type": "world_state_flag",
-            "key": "ruins_discovered",
-            "value": true
-        }
-    }
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    node_id: str = Field(
-        ...,
-        description="Unique ID for this story node."
-    )
-
-    semantic_concept: str = Field(
-        ...,
-        description="The semantic meaning of this story beat. Never raw dialogue. Only concept."
-    )
-
-    completion_condition: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Deterministic condition that must be satisfied to complete this node."
-    )
-
+    node_id: str = Field(..., description="Unique ID for this story node.")
+    semantic_concept: str = Field(..., description="The semantic meaning of this story beat.")
+    completion_condition: Dict[str, Any] = Field(default_factory=dict, description="Deterministic condition that must be satisfied to complete this node.")
 
 class NarrativeEdge(BaseModel):
-    """
-    A directed connection between two narrative nodes.
-
-    Example:
-    {
-        "from_node": "node_enter_ruins",
-        "to_node": "node_find_signal"
-    }
-
-    This means:
-    node_find_signal can only become active after node_enter_ruins is complete.
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    from_node: str = Field(
-        ...,
-        description="The source node ID. This node must happen first."
-    )
-
-    to_node: str = Field(
-        ...,
-        description="The target node ID. This node unlocks after the source node completes."
-    )
-
+    from_node: str = Field(..., description="The source node ID.")
+    to_node: str = Field(..., description="The target node ID.")
 
 class QuestDNA(BaseModel):
-    """
-    The full procedural quest graph.
-
-    This is not a script.
-    This is a directed graph of semantic story nodes.
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    quest_id: str = Field(
-        ...,
-        description="Unique ID for this quest."
-    )
-
-    nodes: List[NarrativeNode] = Field(
-        default_factory=list,
-        description="All narrative nodes inside this quest graph."
-    )
-
-    edges: List[NarrativeEdge] = Field(
-        default_factory=list,
-        description="Directed edges between nodes. Must form a Directed Acyclic Graph."
-    )
-
-    prerequisites: List[str] = Field(
-        default_factory=list,
-        description="Quest-level prerequisites that must be true before this quest can become active."
-    )
-
-    state_mutations: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Deterministic World State mutations triggered by this quest."
-    )
+    quest_id: str = Field(..., description="Unique ID for this quest.")
+    nodes: List[NarrativeNode] = Field(default_factory=list, description="All narrative nodes inside this quest graph.")
+    edges: List[NarrativeEdge] = Field(default_factory=list, description="Directed edges between nodes.")
+    prerequisites: List[str] = Field(default_factory=list, description="Quest-level prerequisites.")
+    state_mutations: Dict[str, Any] = Field(default_factory=dict, description="Deterministic World State mutations.")
 
 # ==========================================================
 # DAY 33: THE SOCIAL HOLE (DETERMINISTIC SOCIAL MATRICES)
 # ==========================================================
-# This is the Social Matrix DNA.
-#
-# We NEVER hardcode "+5 reputation" or static faction reactions.
-# The Brain outputs SocialDNA.
-# The Social Engine reads this DNA as a weighted mathematical graph:
-#   - FactionDNA = a social node
-#   - RelationshipTensor = a weighted edge between social nodes
-#   - SocialRule = a deterministic ripple rule
-#   - SocialAction = the event that sends a ripple through the matrix
-#
-# Drama emerges from math.
-# ==========================================================
-
 class FactionDNA(BaseModel):
-    """
-    A social group inside the Social Matrix.
-
-    A faction can be:
-    - a guild
-    - a city
-    - a family
-    - a corporation
-    - a religion
-    - a crew
-    - a government
-    - a secret society
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    faction_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
-        description="Unique ID for this faction."
-    )
-
-    name: str = Field(
-        ...,
-        description="The name of the faction."
-    )
-
-    description: str = Field(
-        default="",
-        description="A short semantic description of the faction."
-    )
-
-    values: List[str] = Field(
-        default_factory=list,
-        description="What the faction believes in."
-    )
-
-    goals: List[str] = Field(
-        default_factory=list,
-        description="What the faction wants."
-    )
-
-    disposition_toward_player: float = Field(
-        default=0.0,
-        description="-1.0 means hostile, 0.0 means neutral, +1.0 means allied."
-    )
-
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra deterministic faction memory."
-    )
-
+    faction_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique ID for this faction.")
+    name: str = Field(..., description="The name of the faction.")
+    description: str = Field(default="", description="A short semantic description of the faction.")
+    values: List[str] = Field(default_factory=list, description="What the faction believes in.")
+    goals: List[str] = Field(default_factory=list, description="What the faction wants.")
+    disposition_toward_player: float = Field(default=0.0, description="-1.0 means hostile, 0.0 means neutral, +1.0 means allied.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Extra deterministic faction memory.")
 
 class RelationshipTensor(BaseModel):
-    """
-    A weighted relationship edge between two social entities.
-
-    weight meaning:
-    -1.0 = hatred / hostility
-     0.0 = neutral
-    +1.0 = alliance / deep trust
-
-    This replaces hardcoded reputation numbers.
-    Society becomes a mathematical graph.
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    source_id: str = Field(
-        ...,
-        description="The entity or faction where this relationship starts."
-    )
-
-    target_id: str = Field(
-        ...,
-        description="The entity or faction where this relationship points."
-    )
-
-    weight: float = Field(
-        default=0.0,
-        description="The mathematical disposition from source to target."
-    )
-
-    relationship_type: str = Field(
-        default="neutral",
-        description="Examples: alliance, rivalry, debt, trade, religious_tension."
-    )
-
-    confidence: float = Field(
-        default=1.0,
-        description="How stable or certain this relationship is."
-    )
-
-    notes: str = Field(
-        default="",
-        description="Optional semantic note for the Brain."
-    )
-
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra deterministic relationship memory."
-    )
-
+    source_id: str = Field(..., description="The entity or faction where this relationship starts.")
+    target_id: str = Field(..., description="The entity or faction where this relationship points.")
+    weight: float = Field(default=0.0, description="The mathematical disposition from source to target.")
+    relationship_type: str = Field(default="neutral", description="Examples: alliance, rivalry, debt, trade, religious_tension.")
+    confidence: float = Field(default=1.0, description="How stable or certain this relationship is.")
+    notes: str = Field(default="", description="Optional semantic note for the Brain.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Extra deterministic relationship memory.")
 
 class SocialRule(BaseModel):
-    """
-    A deterministic rule for how actions ripple through society.
-
-    Example:
-    If player helps Faction A,
-    factions hostile to Faction A reduce disposition toward player.
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    rule_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
-        description="Unique ID for this social rule."
-    )
-
-    trigger_action: str = Field(
-        default="*",
-        description="The SocialAction type this rule responds to. Use '*' for all actions."
-    )
-
-    source_faction_id: Optional[str] = Field(
-        default=None,
-        description="Optional faction this rule specifically applies to."
-    )
-
-    target_faction_id: Optional[str] = Field(
-        default=None,
-        description="Optional target faction this rule specifically applies to."
-    )
-
-    effect_type: str = Field(
-        default="disposition_change",
-        description="The type of mathematical effect, e.g., disposition_change, trade_block, dialogue_lock."
-    )
-
-    magnitude_multiplier: float = Field(
-        default=1.0,
-        description="How strongly this rule amplifies or dampens the ripple."
-    )
-
-    description: str = Field(
-        default="",
-        description="Human-readable explanation for the Brain and Founder."
-    )
-
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra deterministic rule memory."
-    )
-
+    rule_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique ID for this social rule.")
+    trigger_action: str = Field(default="*", description="The SocialAction type this rule responds to.")
+    source_faction_id: Optional[str] = Field(default=None, description="Optional faction this rule specifically applies to.")
+    target_faction_id: Optional[str] = Field(default=None, description="Optional target faction this rule specifically applies to.")
+    effect_type: str = Field(default="disposition_change", description="The type of mathematical effect.")
+    magnitude_multiplier: float = Field(default=1.0, description="How strongly this rule amplifies or dampens the ripple.")
+    description: str = Field(default="", description="Human-readable explanation for the Brain and Founder.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Extra deterministic rule memory.")
 
 class SocialDNA(BaseModel):
-    """
-    The complete Social Matrix DNA.
-
-    This is the living society graph.
-    Factions are nodes.
-    Relationship tensors are weighted edges.
-    Social rules define how actions ripple through the web.
-    """
-
     model_config = ConfigDict(extra="allow")
-
-    factions: List[FactionDNA] = Field(
-        default_factory=list,
-        description="All factions inside this society."
-    )
-
-    relationship_tensors: List[RelationshipTensor] = Field(
-        default_factory=list,
-        description="Weighted relationships between factions, NPCs, and the player."
-    )
-
-    social_rules: List[SocialRule] = Field(
-        default_factory=list,
-        description="Deterministic rules that govern how actions ripple through society."
-    )
-
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra deterministic society memory."
-    )
-
+    factions: List[FactionDNA] = Field(default_factory=list, description="All factions inside this society.")
+    relationship_tensors: List[RelationshipTensor] = Field(default_factory=list, description="Weighted relationships between factions, NPCs, and the player.")
+    social_rules: List[SocialRule] = Field(default_factory=list, description="Deterministic rules that govern how actions ripple through society.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Extra deterministic society memory.")
 
 class SocialAction(BaseModel):
-    """
-    A single social event performed by an actor.
-
-    Examples:
-    - player helps Faction A
-    - player steals from merchant
-    - player completes guild quest
-    - player betrays ally
-    """
-
     model_config = ConfigDict(extra="allow")
+    actor_id: str = Field(..., description="The ID of the actor performing the action.")
+    target_id: str = Field(..., description="The ID of the faction, NPC, or group being affected.")
+    action_type: str = Field(..., description="The semantic action, e.g., help, steal, betray, donate, insult.")
+    magnitude: float = Field(default=0.1, description="How strong the action is.")
+    context: Dict[str, Any] = Field(default_factory=dict, description="Extra context for the Social Engine.")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="The exact time the social action occurred.")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Extra deterministic action memory.")
 
-    actor_id: str = Field(
-        ...,
-        description="The ID of the actor performing the action."
-    )
+# ==========================================================
+# DAY 34: THE LIVING WORLD TRINITY (ECOLOGY & FLOW STATE)
+# PLACED HERE (ABOVE AppDNA) SO PYTHON KNOWS THEM BEFORE AppDNA USES THEM.
+# ==========================================================
+class PacingDirective(str, Enum):
+    INCREASE_TENSION = "increase_tension"
+    REDUCE_DIFFICULTY = "reduce_difficulty"
+    MAINTAIN_FLOW = "maintain_flow"
+    QUIET_MOMENT = "quiet_moment"
 
-    target_id: str = Field(
-        ...,
-        description="The ID of the faction, NPC, or group being affected."
-    )
+class EcologyDNA(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    species_list: List[str] = Field(default_factory=list, description="All species or ecological actors in this biome.")
+    predator_prey_links: List[Tuple[str, str]] = Field(default_factory=list, description="Predator-prey relationships. Each tuple is (predator, prey).")
+    hunger_rates: Dict[str, float] = Field(default_factory=dict, description="How quickly each species experiences hunger pressure.")
+    reproduction_cycles: Dict[str, int] = Field(default_factory=dict, description="How many ticks between reproduction opportunities.")
+    territory_ranges: Dict[str, float] = Field(default_factory=dict, description="Territory radius or range needed by each species.")
+    carrying_capacity: Dict[str, int] = Field(default_factory=dict, description="Maximum sustainable population for each species.")
 
-    action_type: str = Field(
-        ...,
-        description="The semantic action, e.g., help, steal, betray, donate, insult."
-    )
-
-    magnitude: float = Field(
-        default=0.1,
-        description="How strong the action is. Positive or negative intensity."
-    )
-
-    context: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra context for the Social Engine."
-    )
-
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="The exact time the social action occurred."
-    )
-
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra deterministic action memory."
-    )
+class FlowDNA(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    flow_score: float = Field(default=50.0, ge=0.0, le=100.0, description="Current flow quality from 0 to 100.")
+    challenge_level: float = Field(default=0.5, ge=0.0, le=1.0, description="Current challenge pressure from 0 to 1.")
+    skill_level: float = Field(default=0.5, ge=0.0, le=1.0, description="Estimated player skill from 0 to 1.")
+    pacing_directive: PacingDirective = Field(default=PacingDirective.MAINTAIN_FLOW, description="The Brain's next emotional pacing command.")
+    tension_curve: List[float] = Field(default_factory=list, description="Recent tension history for pacing analysis.")
+    session_start_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="UTC timestamp when the current session began.")
+    failure_count: int = Field(default=0, ge=0, description="Number of recent failures or deaths.")
+    hesitation_ms: float = Field(default=0.0, ge=0.0, description="Average input hesitation in milliseconds.")
 
 # ==========================================================
 # MASTER APP DNA (THE SINGLE SOURCE OF TRUTH)
@@ -803,14 +456,14 @@ class AppComponent(BaseModel):
 
 class AppDNA(BaseModel):
     model_config = ConfigDict(extra="allow", title="Master AppDNA Genesis")
-    
+
     app_name: str = Field(default="Genesis Engine v1")
     version: str = Field(default="0.1.0")
     entity_name: str = Field(default="Genesis App")
-    
+
     world_state: WorldState = Field(default_factory=WorldState)
     design_tokens: DesignTokens = Field(default_factory=DesignTokens)
-    
+
     primitives: List[ProceduralPrimitiveDNA] = Field(default_factory=list)
     physics: PhysicsDNA = Field(default_factory=PhysicsDNA)
     drama_budget: DramaBudget = Field(default_factory=DramaBudget)
@@ -821,24 +474,19 @@ class AppDNA(BaseModel):
     latency_logic: TwoTierLatencyDNA = Field(default_factory=TwoTierLatencyDNA)
     ui_compiler: OntologicalUICompiler = Field(default_factory=OntologicalUICompiler)
     renderer: PriorityDualEngineDNA = Field(default_factory=PriorityDualEngineDNA)
-    
+
     required_components: List[AppComponent] = Field(default_factory=list)
     telemetry: TelemetryDNA = Field(default_factory=TelemetryDNA)
-    
+
     locale: LocaleDNA = Field(default_factory=LocaleDNA)
     tutorials: List[TutorialDNA] = Field(default_factory=list)
 
-    # DAY 31: The Accessibility Hole.
-    # Empathy is now part of the master DNA.
     accessibility: AccessibilityDNA = Field(default_factory=AccessibilityDNA)
-
-    # DAY 32: The Quest Hole.
-    # Procedural narrative graphs are now part of the master DNA.
     quests: List[QuestDNA] = Field(default_factory=list)
-
-    # DAY 33: The Social Hole.
-    # Emerent relationships and deterministic social matrices are now part of the master DNA.
     social: SocialDNA = Field(default_factory=SocialDNA)
+
+    ecology: EcologyDNA = Field(default_factory=EcologyDNA)
+    flow: FlowDNA = Field(default_factory=FlowDNA)
 
 # ==========================================================
 # DAY 12, 15, 16, 17, 18, 20, 21 & 22 RESTORATION
@@ -880,7 +528,6 @@ class SecurityDNA(BaseModel):
     restricted_characters: List[str] = Field(default_factory=list)
     strict_mode: bool = Field(default=True)
 
-# --- DAY 15 ADDITIONS ---
 class ParametricGenome(BaseModel):
     model_config = ConfigDict(extra="allow")
     seed: int = Field(default=0)
@@ -899,7 +546,6 @@ class VFXProfile(BaseModel):
     rain_intensity: float = Field(default=0.0)
     neon_reflection: float = Field(default=0.0)
 
-# --- DAY 16 ADDITIONS ---
 class ScatterRule(BaseModel):
     model_config = ConfigDict(extra="allow")
     asset_type: str = Field(default="tree")
@@ -914,7 +560,6 @@ class BiomeDNA(BaseModel):
     scatter_density: float = Field(default=0.5)
     scatter_rules: List[ScatterRule] = Field(default_factory=list)
 
-# --- DAY 17 ADDITIONS ---
 class NavMeshDNA(BaseModel):
     model_config = ConfigDict(extra="allow")
     grid_resolution: float = Field(default=1.0)
@@ -928,7 +573,6 @@ class PathingIntent(BaseModel):
     start_coords: list = Field(default_factory=list)
     target_coords: list = Field(default_factory=list)
 
-# --- DAY 18 ADDITIONS ---
 class Route(BaseModel):
     model_config = ConfigDict(extra="allow")
     method: str = Field(default="GET")
@@ -941,7 +585,6 @@ class LogicDNA(BaseModel):
     auth_type: str = Field(default="None")
     database_schema: str = Field(default="")
 
-# --- DAY 20 ADDITIONS ---
 class DeployDNA(BaseModel):
     model_config = ConfigDict(extra="allow")
     target_environment: str = Field(default="docker")
@@ -991,16 +634,7 @@ class EconomicEvent(BaseModel):
 # ==========================================================
 # DAY 30: THE CHRONO DNA — DETERMINISTIC SEED CHECKPOINTING
 # ==========================================================
-# This is the Save State Hole. We NEVER save heavy 3D coordinates
-# or binary blobs. We only save the Mathematical Seed, the Timestamp,
-# and a hash of the Abstracted Input Log.
-# Infinite rewind history = kilobytes, not gigabytes. Zero RAM bloat.
-# ==========================================================
-
 class ChronoDNA(BaseModel):
-    """
-    The Time Capsule.
-    """
     model_config = ConfigDict(extra="allow")
     world_seed: int = Field(..., description="The master mathematical seed that generated the entire world.")
     timestamp: float = Field(..., description="The exact moment in game-time (in seconds) when this checkpoint was created.")
@@ -1008,9 +642,6 @@ class ChronoDNA(BaseModel):
     rewind_depth: int = Field(default=0, description="How many checkpoints back from 'now' this one sits.")
 
 class RewindIntent(BaseModel):
-    """
-    The Time Travel Request.
-    """
     model_config = ConfigDict(extra="allow")
     target_timestamp: float = Field(..., description="The exact game-time (in seconds) the player wants to rewind to.")
     reason: str = Field(default="manual", description="Why the rewind was triggered (e.g., 'manual', 'player_death').")

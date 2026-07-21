@@ -32,7 +32,8 @@ from packages.core.brain import (
     act_as_translation_director, # ADDED FOR DAY 27
     act_as_economy_director, # ADDED FOR DAY 28
     act_as_mentor_director, # ADDED FOR DAY 29
-    act_as_time_director # ADDED FOR DAY 30
+    act_as_time_director, # ADDED FOR DAY 30
+    generate_pacing_directive # ADDED FOR DAY 34
 )
 from packages.core.ui_synthesizer import synthesize_design_tokens, compile_ui
 from packages.core.genesis_renderer import genesis_renderer
@@ -46,8 +47,10 @@ from packages.core.localization_engine import LocalizationEngine # ADDED FOR DAY
 from packages.core.economy_engine import economy_engine # ADDED FOR DAY 28
 from packages.core.tutorial_engine import TutorialEngine # ADDED FOR DAY 29
 from packages.core.chrono_engine import ChronoEngine # ADDED FOR DAY 30
+from packages.core.ecology_engine import simulate_tick, resolve_cascade # ADDED FOR DAY 34
+from packages.core.flow_engine import calculate_flow_score # ADDED FOR DAY 34
 
-# --- DAY 23 to 30 ADDITIONS: Telemetry, Audio, Input, Mod, Locale, Economy, Tutorial & Chrono Models ---
+# --- DAY 23 to 34 ADDITIONS: Telemetry, Audio, Input, Mod, Locale, Economy, Tutorial, Chrono, Ecology & Flow Models ---
 from packages.core.models import (
     VisualQuery, WorldState, NavMeshDNA, BiomeDNA, AppDNA, SecurityDNA,
     PerformanceReport, BottleneckType,
@@ -57,7 +60,8 @@ from packages.core.models import (
     LocaleDNA, SemanticToken, FluidUIRules, # ADDED FOR DAY 27
     EconomyDNA, EconomicEvent, # ADDED FOR DAY 28
     TutorialDNA, # ADDED FOR DAY 29
-    ChronoDNA, RewindIntent # ADDED FOR DAY 30
+    ChronoDNA, RewindIntent, # ADDED FOR DAY 30
+    EcologyDNA, FlowDNA, PacingDirective # ADDED FOR DAY 34
 )
 from packages.core.telemetry_engine import telemetry_brain
 from packages.core.modding_engine import engine as modding_engine # ADDED FOR DAY 26
@@ -328,13 +332,6 @@ def _apply_accessibility_updates(current_accessibility, updates):
 def _parse_accessibility_mode(mode, current_accessibility):
     """
     Parse CLI profile mode into AccessibilityDNA.
-
-    Examples:
-    - standard
-    - comfort
-    - max_support
-    - high_contrast+generous_timing+reduced_motion
-    - high_contrast,generous_timing,reduced_motion
     """
     if AccessibilityDNA is None:
         return None, [], "AccessibilityDNA is not available."
@@ -390,9 +387,6 @@ def _parse_accessibility_mode(mode, current_accessibility):
 
 
 def _print_ui_accessibility_report(report):
-    """
-    Print exact UI Token Synthesizer changes.
-    """
     if not report:
         console.print("[yellow]UI Token Synthesizer: unavailable.[/yellow]")
         return
@@ -424,9 +418,6 @@ def _print_ui_accessibility_report(report):
 
 
 def _print_input_accessibility_report(report):
-    """
-    Print exact Input Engine timing changes.
-    """
     if not report:
         console.print("[yellow]Input Engine: unavailable.[/yellow]")
         return
@@ -460,9 +451,6 @@ def _print_input_accessibility_report(report):
 
 
 def _print_audio_accessibility_report(report):
-    """
-    Print exact Audio DSP DNA changes.
-    """
     if not report:
         console.print("[yellow]Audio DSP Engine: unavailable.[/yellow]")
         return
@@ -481,9 +469,6 @@ def _print_audio_accessibility_report(report):
 
 
 def _print_camera_accessibility_report(report):
-    """
-    Print exact Camera Comfort Engine changes.
-    """
     if not report:
         console.print("[yellow]Camera Comfort Engine: unavailable.[/yellow]")
         return
@@ -520,9 +505,6 @@ def _print_camera_accessibility_report(report):
 # ==========================================
 
 def _quest_jsonable(obj):
-    """
-    Convert Pydantic models, dicts, lists, or primitives into JSON-safe data.
-    """
     if obj is None:
         return None
 
@@ -557,13 +539,6 @@ def _quest_json_block(payload) -> Syntax:
 
 
 def _quest_parse_completed(raw_value: str):
-    """
-    Parse completed node IDs from CLI input.
-
-    Supported:
-    --completed node_1,node_2
-    --completed '["node_1", "node_2"]'
-    """
     if not raw_value:
         return []
 
@@ -591,12 +566,6 @@ def _quest_parse_completed(raw_value: str):
 
 
 def _quest_demo_payload() -> dict:
-    """
-    Deterministic demo QuestDNA.
-
-    This allows the CLI to test the Quest Hole even if Supabase
-    has no active narrative graph yet.
-    """
     return {
         "quest_id": "quest_demo_ruins",
         "nodes": [
@@ -653,11 +622,6 @@ def _quest_demo_payload() -> dict:
 
 
 def _quest_load_payload(project_id=None, quest_id=None):
-    """
-    Load QuestDNA from Supabase if possible.
-
-    If no active quest exists, fall back to the deterministic demo quest.
-    """
     demo = _quest_demo_payload()
 
     if not project_id:
@@ -703,12 +667,6 @@ def _quest_load_payload(project_id=None, quest_id=None):
 
 
 def _quest_save_to_supabase(project_id, quest_json: dict):
-    """
-    Save active QuestDNA into Supabase narrative_graphs.
-
-    This deactivates older active quests for the same project,
-    then upserts the new quest graph.
-    """
     if not supabase:
         return False, "Supabase is not connected."
 
@@ -745,7 +703,6 @@ def _quest_save_to_supabase(project_id, quest_json: dict):
     }
 
     try:
-        # Deactivate older active quest graphs for this project.
         try:
             (
                 supabase.table("narrative_graphs")
@@ -756,7 +713,6 @@ def _quest_save_to_supabase(project_id, quest_json: dict):
         except Exception:
             pass
 
-        # Insert or update this QuestDNA.
         (
             supabase.table("narrative_graphs")
             .upsert(
@@ -897,29 +853,6 @@ def _quest_print_progress_result(result: dict):
 # ==========================================
 
 def _social_demo_payload() -> dict:
-    """
-    Deterministic demo SocialDNA.
-
-    Faction A:
-    - Merchants Guild
-
-    Faction B:
-    - Iron Guard
-    - hostile toward Merchants Guild
-
-    Faction C:
-    - Ashen Choir
-    - mostly neutral toward Merchants Guild
-
-    NPC:
-    - Ivan
-    - allied with Iron Guard
-
-    This demonstrates emergent consequences:
-    If the player helps the Merchants Guild,
-    the Iron Guard may become hostile,
-    and Ivan may refuse interaction because he is allied with the Iron Guard.
-    """
     return {
         "factions": [
             {
@@ -1045,9 +978,6 @@ def _social_demo_payload() -> dict:
 
 
 def _social_demo_dna():
-    """
-    Build the deterministic demo SocialDNA object.
-    """
     if SocialDNA is None:
         return None
 
@@ -1055,13 +985,6 @@ def _social_demo_dna():
 
 
 def _social_load_from_file(file_path: str):
-    """
-    Load SocialDNA from a JSON file.
-
-    Accepted formats:
-    1. A raw SocialDNA object.
-    2. {"social_dna": {...SocialDNA...}}
-    """
     if SocialDNA is None:
         return None
 
@@ -1092,12 +1015,6 @@ def _social_load_from_file(file_path: str):
 
 
 def _social_load_active_from_supabase(project_id=None):
-    """
-    Load the master SocialDNA row from Supabase social_matrices.
-
-    Master rows have:
-    player_id IS NULL
-    """
     if SocialDNA is None:
         return None
 
@@ -1134,13 +1051,6 @@ def _social_load_active_from_supabase(project_id=None):
 
 
 def _social_load_dna(file_path=None, project_id=None):
-    """
-    Load SocialDNA in this priority order:
-
-    1. Explicit JSON file.
-    2. Active master row from Supabase.
-    3. Deterministic demo society.
-    """
     if SocialDNA is None:
         return None, "unavailable"
 
@@ -1161,9 +1071,6 @@ def _social_load_dna(file_path=None, project_id=None):
 
 
 def _social_make_engine(social_dna, actor_id: str = "player"):
-    """
-    Create a Social Matrix Engine with clear demo-friendly propagation settings.
-    """
     if SocialMatrixEngine is None:
         return None
 
@@ -1178,9 +1085,6 @@ def _social_make_engine(social_dna, actor_id: str = "player"):
 
 
 def _social_entity_name(entity_id: str, social_dna) -> str:
-    """
-    Pretty-print a social entity ID.
-    """
     if entity_id == "player":
         return "Player"
 
@@ -1198,9 +1102,6 @@ def _social_entity_name(entity_id: str, social_dna) -> str:
 
 
 def _social_print_edges(engine, social_dna) -> None:
-    """
-    Print all relationship edges.
-    """
     if engine is None:
         console.print("[red]SocialMatrixEngine is unavailable.[/red]")
         return
@@ -1237,9 +1138,6 @@ def _social_print_disposition_table(
     actor_id: str,
     title: str,
 ) -> None:
-    """
-    Print dispositions toward the actor.
-    """
     if engine is None:
         console.print("[red]SocialMatrixEngine is unavailable.[/red]")
         return
@@ -1268,9 +1166,6 @@ def _social_print_disposition_table(
 
 
 def _social_print_direct_effects(report: dict, social_dna) -> None:
-    """
-    Print direct consequences of the SocialAction.
-    """
     direct_effects = report.get("direct_effects", [])
 
     table = Table(title="Direct Effects")
@@ -1300,9 +1195,6 @@ def _social_print_direct_effects(report: dict, social_dna) -> None:
 
 
 def _social_print_ripple_effects(report: dict, social_dna) -> None:
-    """
-    Print mathematical ripple consequences.
-    """
     ripple_effects = report.get("ripple_effects", [])
 
     table = Table(title="Ripple Effects")
@@ -1332,9 +1224,6 @@ def _social_print_ripple_effects(report: dict, social_dna) -> None:
 
 
 def _social_print_interaction_blocks(engine, social_dna) -> None:
-    """
-    Print who refuses interaction with whom.
-    """
     if engine is None:
         console.print("[red]SocialMatrixEngine is unavailable.[/red]")
         return
@@ -1475,7 +1364,6 @@ def compile(app_name):
 
     design_config = synthesize_design_tokens(design_tokens)
     
-    # Day 23 Fix: compile_ui now returns a dict with 'code' and 'metrics'
     ui_report = compile_ui(app_dna, design_config)
     final_react_code = ui_report.get("code", "")
     
@@ -1625,7 +1513,6 @@ def generate_backend(entity):
     
     console.print("⚙️ [bold yellow]Compiling DNA into bulletproof Python code...[/bold yellow]")
     
-    # Day 23 Fix: save_compiled_file now returns a dict report
     compile_report = save_compiled_file(dna, output_folder="output")
     file_path = compile_report.get("file_path", "Unknown")
     
@@ -1847,7 +1734,6 @@ def telemetry_check():
         console.print("[bold red]Error: Supabase is not connected. Cannot read the Black Box.[/bold red]")
         return
 
-    # 1. Fetch the last 5 reports from the Black Box
     with console.status("[bold green]Querying the Black Box for recent performance drops...[/bold green]"):
         try:
             response = supabase.table("telemetry_logs").select("*").order("created_at", desc=True).limit(5).execute()
@@ -1862,7 +1748,6 @@ def telemetry_check():
         console.print("[cyan]Run the frontend app and trigger a lag spike to populate the Black Box![/cyan]")
         return
 
-    # 2. Display the reports in a Rich Table
     table = Table(title="📊 Last 5 Telemetry Reports (Black Box)")
     table.add_column("Timestamp", style="dim")
     table.add_column("FPS", justify="right", style="bold")
@@ -1873,7 +1758,7 @@ def telemetry_check():
     for log in logs:
         ts = log.get('created_at', 'Unknown')
         if len(ts) > 19:
-            ts = ts[:19] # Trim the timezone/milliseconds for cleaner display
+            ts = ts[:19] 
             
         fps = log.get('current_fps', 0)
         dropped = log.get('dropped_frames', 0)
@@ -1892,7 +1777,6 @@ def telemetry_check():
 
     console.print(table)
 
-    # 3. Find the most recent unhealthy report to trigger the AI Brain
     bad_report_dict = None
     for log in logs:
         bn = log.get('bottleneck_component')
@@ -1904,27 +1788,22 @@ def telemetry_check():
         console.print("\n[bold green]✅ All recent reports are healthy. The engine is running perfectly at 60fps![/bold green]")
         return
 
-    # 4. Trigger the AI Self-Correction Loop
     console.print(f"\n[bold red]🚨 CRITICAL BOTTLENECK DETECTED: {bad_report_dict.get('bottleneck_component').upper()}[/bold red]")
     console.print("[bold yellow]Initiating AI Self-Healing Sequence...[/bold yellow]")
     
-    # Reconstruct the Pydantic model from the Supabase dict
     try:
         report_obj = PerformanceReport.model_validate(bad_report_dict)
     except Exception as e:
         console.print(f"[red]Failed to validate report against Pydantic schema: {e}[/red]")
         return
 
-    # Load a default AppDNA to heal
     current_dna = AppDNA(app_name="Genesis Engine") 
     
     with console.status("[bold green]Groq AI Brain is analyzing the bottleneck and downgrading DNA...[/bold green]"):
         healed_dna = telemetry_brain.heal_dna(report_obj, current_dna)
 
-    # 5. Print the AI's Self-Correction Suggestions (The Healed DNA)
     console.print("\n[bold magenta]--- 🧬 AI SELF-CORRECTION: HEALED DNA ---[/bold magenta]")
     
-    # Show exactly what the AI downgraded
     original_renderer = current_dna.renderer
     healed_renderer = healed_dna.renderer
     
@@ -1967,7 +1846,6 @@ def audio_test(sound_profile):
         
     console.print("[bold green]✅ Groq successfully generated flawless AudioDNA![/bold green]\n")
     
-    # Display the DNA in a beautiful Rich Table
     table = Table(title=f"🎧 Web Audio API Parameters for: {sound_profile}")
     table.add_column("Parameter", style="cyan", no_wrap=True)
     table.add_column("Value", style="magenta")
@@ -1981,7 +1859,6 @@ def audio_test(sound_profile):
     
     console.print(table)
     
-    # Show the raw JSON for the browser
     console.print("\n[bold yellow]Raw JSON DNA ready for the Web Audio API:[/bold yellow]")
     dna_json = json.dumps(audio_dna.model_dump(), indent=2)
     syntax = Syntax(dna_json, "json", theme="monokai", line_numbers=True)
@@ -2008,7 +1885,6 @@ def rebind_input(action_name, new_key):
     """
     console.print(Panel(f"[bold cyan]Recompiling Reality: Binding '{action_name}' to '{new_key}'[/bold cyan]", title="Day 25: Input Engine"))
     
-    # 1. Load the Master Save File
     state_data = {"input_dna": []}
     if os.path.exists(STATE_FILE):
         try:
@@ -2020,7 +1896,6 @@ def rebind_input(action_name, new_key):
     if "input_dna" not in state_data:
         state_data["input_dna"] = []
         
-    # 2. Find and Update the DNA
     found = False
     for rule in state_data["input_dna"]:
         if rule.get("action_name") == action_name:
@@ -2030,7 +1905,6 @@ def rebind_input(action_name, new_key):
             console.print(f"[yellow]Updated existing rule: {action_name} ({old_key} -> {new_key})[/yellow]")
             break
             
-    # 3. If not found, append a new rule
     if not found:
         new_rule = {
             "action_name": action_name,
@@ -2041,7 +1915,6 @@ def rebind_input(action_name, new_key):
         state_data["input_dna"].append(new_rule)
         console.print(f"[green]Created new rule: {action_name} -> {new_key}[/green]")
         
-    # 4. Save back to disk
     try:
         with open(STATE_FILE, 'w') as f:
             json.dump(state_data, f, indent=4)
@@ -2099,15 +1972,12 @@ def install_mod(mod_id):
 
     with console.status(f"[bold cyan]⚡ INITIATING SAFE INJECTION PROTOCOL FOR {mod_id}...[/bold cyan]"):
         try:
-            # 1. Fetch DNA
             response = supabase.table('community_vault').select('mod_dna').eq('id', mod_id).single().execute()
             mod_dna_dict = response.data['mod_dna']
             
-            # 2. Validate (The Bouncer)
             safe_mod = ModDNA(**mod_dna_dict)
             console.print(f"[green]✓ DNA VALIDATED:[/green] {safe_mod.mod_name}")
             
-            # 3. Load Local State
             state_file = STATE_FILE
             if not os.path.exists(state_file):
                 console.print("[yellow]No OGF_STATE.json found. Initializing fresh reality...[/yellow]")
@@ -2118,10 +1988,8 @@ def install_mod(mod_id):
                     full_state = json.load(f)
                     current_world = WorldState(**full_state.get('world_state', {}))
             
-            # 4. Inject (The Merger)
             new_world = modding_engine.inject_mod(current_world, safe_mod, DramaBudget())
             
-            # 5. Save
             full_state['world_state'] = new_world.model_dump()
             with open(state_file, 'w') as f:
                 json.dump(full_state, f, indent=4)
@@ -2150,7 +2018,6 @@ def set_locale(language_code: str):
     """
     console.print(f"\n[bold cyan]🌍 Switching Reality Locale to: {language_code.upper()}[/bold cyan]")
     
-    # 1. Load current state from the master save file
     state_data = {}
     if os.path.exists(STATE_FILE):
         try:
@@ -2161,7 +2028,6 @@ def set_locale(language_code: str):
             
     app_dna_dict = state_data.get("app_dna", AppDNA().model_dump())
     
-    # 2. Update the LocaleDNA inside the AppDNA
     cadence_shift = 0.0
     if language_code in ['es', 'ja', 'it']:
         cadence_shift = 0.15 
@@ -2177,7 +2043,6 @@ def set_locale(language_code: str):
     app_dna_dict["locale"] = new_locale.model_dump()
     state_data["app_dna"] = app_dna_dict
     
-    # 3. Save back to OGF_STATE.json
     try:
         with open(STATE_FILE, 'w') as f:
             json.dump(state_data, f, indent=4)
@@ -2186,7 +2051,6 @@ def set_locale(language_code: str):
         console.print(f"[red]Error saving state: {e}[/red]")
         return
     
-    # 4. Recompile UI with new Fluidity Rules
     console.print("[yellow]🏭 Triggering Fluid UI Recompilation...[/yellow]")
     app_dna = AppDNA(**app_dna_dict)
     design_config = synthesize_design_tokens(app_dna.design_tokens)
@@ -2197,7 +2061,6 @@ def set_locale(language_code: str):
     else:
         console.print("[red]❌ UI Recompilation failed.[/red]")
         
-    # 5. Print Localized Semantic Output to verify the dictionary
     console.print("\n[bold magenta]📖 Testing Semantic Dictionary Translation:[/bold magenta]")
     try:
         engine = LocalizationEngine()
@@ -2237,36 +2100,29 @@ def simulate_economy(hours):
     """
     console.print(Panel(f"[bold cyan]Day 28: Simulating Economy Flow for {hours} hours...[/bold cyan]", title="The Deterministic Math Balancer"))
     
-    # 1. Generate a balanced EconomyDNA using the Economy Director
     console.print("[yellow]1. Economy Director is designing the flow tags (Zero raw numbers)...[/yellow]")
     dna = act_as_economy_director("A bustling blacksmith in a cyberpunk slum")
     console.print(f"✅ DNA Generated: {dna.resource_name} ({dna.faucet_type} -> {dna.sink_type})")
     
-    # 2. Calculate the perfect mathematical flow rate
     console.print(f"[yellow]2. Economy Engine is calculating exact yields and costs for a {hours}-hour curve...[/yellow]")
     flow_rate = economy_engine.calculate_flow_rate(dna, gameplay_hours=hours)
     
-    # 3. Run a simulated exploit to test the Guardrails
     console.print("[yellow]3. Simulating an 'Infinite Gold Exploit' to test the Anti-Inflation Guardrails...[/yellow]")
     
-    # Simulate a player trying to earn massive amounts of gold
     exploit_attempts = 50
     total_earned = 0.0
     blocked_count = 0
     
-    # Reset session for the test
     economy_engine.session_earnings = {}
     economy_engine.session_hours = {}
     
     for i in range(exploit_attempts):
-        # Trying to earn 1000 gold per action (way above normal yield)
         fake_event = EconomicEvent(actor_id="hacker_01", amount=1000.0)
         actual_earned = economy_engine.process_transaction(dna, fake_event)
         total_earned += actual_earned
         if actual_earned == 0.0:
             blocked_count += 1
 
-    # 4. Print the beautiful deterministic results
     table = Table(title=f"📊 {hours}-Hour Economy Simulation Results")
     table.add_column("Metric", style="cyan", no_wrap=True)
     table.add_column("Value", style="magenta")
@@ -2298,18 +2154,14 @@ def simulate(scenario):
     """Simulates a struggling player and prints the exact mathematical UI hint."""
     console.print(f"[bold cyan]Mentor Director is analyzing scenario:[/bold cyan] {scenario}")
     
-    # 1. Ask the Brain to generate the TutorialDNA for this scenario
     tutorial_dnas = act_as_mentor_director(scenario)
     
     if not tutorial_dnas:
         console.print("[bold red]Mentor Director could not generate any tutorials.[/bold red]")
         return
 
-    # 2. Initialize the Silent Observer (Tutorial Engine)
     engine = TutorialEngine()
     
-    # 3. Simulate a struggling player state 
-    # We provide fake variables that match the trigger conditions the Brain might invent.
     fake_world_state = {
         "player_health": 20.0,
         "enemy_distance": 4.0,
@@ -2319,14 +2171,12 @@ def simulate(scenario):
     
     console.print("[bold yellow]Simulating struggling player state...[/bold yellow]")
     
-    # 4. Evaluate the tutorials against the fake state
     active_hints = engine.evaluate_tutorials(tutorial_dnas, fake_world_state)
     
     if not active_hints:
         console.print("[bold green]Player is doing fine! No hints needed.[/bold green]")
         return
         
-    # 5. Print the mathematical UI hints using a beautiful Rich Table
     table = Table(title="Active Mathematical UI Hints (Zero Text Boxes!)")
     table.add_column("Concept ID", style="cyan")
     table.add_column("Visual Type", style="magenta")
@@ -2357,14 +2207,12 @@ def chrono_test():
     """Simulates inputs, saves a checkpoint, rewinds, and verifies math."""
     console.print(Panel("[bold cyan]DAY 30: THE DETERMINISTIC REWIND TEST[/bold cyan]", expand=False))
     
-    # 1. Initialize the Engine
     engine = ChronoEngine()
     master_seed = 42
     current_time = 0.0
     
     console.print(f"🌍 [green]Initializing World with Seed: {master_seed}[/green]")
     
-    # 2. Simulate a sequence of abstracted inputs (The Black Box)
     input_log = [
         {"action": "move_forward", "timestamp": 1.0},
         {"action": "jump", "timestamp": 2.5},
@@ -2375,27 +2223,22 @@ def chrono_test():
     console.print(f"⏺️ [yellow]Recording {len(input_log)} abstracted intents to the Black Box...[/yellow]")
     current_time = 10.0 
     
-    # 3. Get the original state at 10 seconds
     original_state = engine.generate_world_layout(master_seed, current_time)
     console.print(f"📍 [cyan]Original State at {current_time}s:[/cyan] {original_state['entities'][0]}")
     
-    # 4. Create a Checkpoint (ChronoDNA) at 4 seconds
     checkpoint_time = 4.0
     checkpoint_dna = engine.create_checkpoint(master_seed, checkpoint_time, depth=1)
     console.print(f"💾 [bold green]Checkpoint Saved![/bold green] Time: {checkpoint_dna.timestamp}s | Hash: {checkpoint_dna.input_log_hash}")
     
-    # 5. Trigger a Rewind Intent back to 4.0 seconds
     console.print("🔄 [bold magenta]Triggering Rewind Intent...[/bold magenta]")
     rewind_intent = RewindIntent(target_timestamp=checkpoint_time, reason="manual_test")
     
-    # 6. Process the Rewind (The Time Travel)
     rewound_state = engine.process_rewind(
         rewind_intent=rewind_intent,
         full_input_log=input_log,
         restored_seed=checkpoint_dna.world_seed
     )
     
-    # 7. Verify the Math
     console.print(f"📍 [cyan]Rewound State at {checkpoint_time}s:[/cyan] {rewound_state['entities'][0]}")
     
     verification_state = engine.generate_world_layout(master_seed, checkpoint_time)
@@ -2405,7 +2248,6 @@ def chrono_test():
     else:
         console.print("[bold red]❌ FAILURE! The math did not align. The Old Paradigm has infected the engine.[/bold red]")
 
-    # 8. Test the Time Director (Brain Upgrade)
     console.print("\n🧠 [bold yellow]Testing the Time Director (Brain Upgrade)...[/bold yellow]")
     calm_world = WorldState(heat_level=0)
     boss_world = WorldState(heat_level=5)
@@ -2436,13 +2278,6 @@ def accessibility():
 def accessibility_profile(mode):
     """
     Sets the AccessibilityDNA profile and adapts all systems.
-
-    Examples:
-    camera accessibility profile standard
-    camera accessibility profile comfort
-    camera accessibility profile max_support
-    camera accessibility profile high_contrast+generous_timing+reduced_motion
-    camera accessibility profile auto
     """
     console.print(
         Panel(
@@ -2457,13 +2292,10 @@ def accessibility_profile(mode):
         console.print("[bold red]AccessibilityDNA is not available. Check packages/core/models.py.[/bold red]")
         return
 
-    # 1. Load the master save file.
     state_data = _load_ogf_state()
 
-    # 2. Read current AccessibilityDNA.
     current_accessibility = _get_current_accessibility(state_data)
 
-    # 3. Resolve the new AccessibilityDNA.
     applied_tokens = []
 
     if str(mode).strip().lower() in ("auto", "empathy", "brain"):
@@ -2528,7 +2360,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
 
     accessibility_dict = _to_json_safe(new_accessibility)
 
-    # 4. Write AccessibilityDNA into OGF_STATE.json.
     state_data["accessibility_dna"] = accessibility_dict
 
     app_dna_dict = state_data.get("app_dna")
@@ -2540,7 +2371,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
 
     console.print("[bold green]✅ AccessibilityDNA updated in OGF_STATE.json.[/bold green]")
 
-    # 5. Adapt UI Token Synthesizer.
     ui_report = {}
 
     if default_accessibility_synthesizer is not None:
@@ -2569,7 +2399,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
                 ui_compiler["atomic_tokens"] = _to_json_safe(adapted_atomic_tokens)
                 app_dna_dict["ui_compiler"] = ui_compiler
 
-    # 6. Adapt Input Engine.
     input_report = {}
 
     if DeterministicInputEngine is not None:
@@ -2586,7 +2415,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
 
             state_data["input_timing_state"] = input_timing_state
 
-    # 7. Adapt Audio DSP DNA.
     audio_report = {}
 
     if default_accessibility_synthesizer is not None:
@@ -2602,7 +2430,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
 
             state_data["audio_dna"] = _to_json_safe(adapted_audio_dna)
 
-    # 8. Adapt Camera Comfort Engine.
     camera_report = {}
 
     if default_camera_comfort_engine is not None:
@@ -2618,7 +2445,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
 
             state_data["camera_rig_state"] = adapted_camera_rig
 
-    # 9. Save final adaptation metadata.
     state_data["last_accessibility_adaptation"] = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "mode_argument": mode,
@@ -2632,7 +2458,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
         }
     }
 
-    # 10. Persist reality.
     saved = _save_ogf_state(state_data)
 
     if saved:
@@ -2640,7 +2465,6 @@ camera accessibility profile high_contrast+generous_timing+reduced_motion
     else:
         console.print("[bold red]❌ Could not save OGF_STATE.json.[/bold red]")
 
-    # 11. Print the exact mathematical changes.
     profile_table = Table(title="🧬 Active AccessibilityDNA")
     profile_table.add_column("DNA Field", style="cyan")
     profile_table.add_column("Value", style="green")
@@ -2702,42 +2526,14 @@ def quest():
 
 
 @quest.command(name="generate")
-@click.option(
-    "--intent",
-    default=None,
-    help="Optional creative intent for the quest."
-)
-@click.option(
-    "--max-nodes",
-    default=3,
-    show_default=True,
-    help="Maximum number of narrative nodes to generate."
-)
-@click.option(
-    "--project-id",
-    default=None,
-    help="Optional Supabase project UUID."
-)
-@click.option(
-    "--save",
-    is_flag=True,
-    default=False,
-    help="Save the generated QuestDNA into Supabase narrative_graphs."
-)
+@click.option("--intent", default=None, help="Optional creative intent for the quest.")
+@click.option("--max-nodes", default=3, show_default=True, help="Maximum number of narrative nodes to generate.")
+@click.option("--project-id", default=None, help="Optional Supabase project UUID.")
+@click.option("--save", is_flag=True, default=False, help="Save the generated QuestDNA into Supabase narrative_graphs.")
 def quest_generate(intent, max_nodes, project_id, save):
-    """
-    Generate a new QuestDNA using the Story Weaver.
-
-    Examples:
-    camera quest generate
-    camera quest generate --intent "A quiet investigation before the storm"
-    camera quest generate --save
-    """
+    """Generate a new QuestDNA using the Story Weaver."""
     if generate_quest_dna_report is None:
-        console.print(
-            "[bold red]Day 32 Story Weaver is not available. "
-            "Check packages/core/brain.py.[/bold red]"
-        )
+        console.print("[bold red]Day 32 Story Weaver is not available. Check packages/core/brain.py.[/bold red]")
         return
 
     if not project_id:
@@ -2762,10 +2558,8 @@ def quest_generate(intent, max_nodes, project_id, save):
 
     if not report.get("success"):
         errors = report.get("errors", [])
-
         for error in errors:
             console.print(f"[red]- {error}[/red]")
-
         console.print("[bold red]QuestDNA generation failed.[/bold red]")
         return
 
@@ -2776,7 +2570,6 @@ def quest_generate(intent, max_nodes, project_id, save):
             project_id=project_id,
             quest_json=report.get("quest_json", {})
         )
-
         if ok:
             console.print(f"[bold green]{message}[/bold green]")
         else:
@@ -2785,48 +2578,18 @@ def quest_generate(intent, max_nodes, project_id, save):
 
 @quest.command(name="progress")
 @click.argument("node_id")
-@click.option(
-    "--quest-id",
-    default=None,
-    help="Optional quest_id. If omitted, uses latest active quest or demo quest."
-)
-@click.option(
-    "--project-id",
-    default=None,
-    help="Optional Supabase project UUID."
-)
-@click.option(
-    "--completed",
-    default="",
-    help="Comma-separated completed node IDs. Example: node_enter_ruins,node_find_signal"
-)
-@click.option(
-    "--force",
-    is_flag=True,
-    default=False,
-    help="Force completion even if unlock condition is not met."
-)
+@click.option("--quest-id", default=None, help="Optional quest_id.")
+@click.option("--project-id", default=None, help="Optional Supabase project UUID.")
+@click.option("--completed", default="", help="Comma-separated completed node IDs.")
+@click.option("--force", is_flag=True, default=False, help="Force completion.")
 def quest_progress(node_id, quest_id, project_id, completed, force):
-    """
-    Simulate completing one narrative node.
-
-    Examples:
-    camera quest progress node_enter_ruins
-    camera quest progress node_find_signal --completed node_enter_ruins
-    camera quest progress node_open_vault --completed node_enter_ruins,node_find_signal
-    """
+    """Simulate completing one narrative node."""
     if progress_quest_node is None:
-        console.print(
-            "[bold red]Day 32 Quest progression is not available. "
-            "Check packages/core/brain.py.[/bold red]"
-        )
+        console.print("[bold red]Day 32 Quest progression is not available. Check packages/core/brain.py.[/bold red]")
         return
 
     if QuestDNA is None:
-        console.print(
-            "[bold red]QuestDNA model is not available. "
-            "Check packages/core/models.py.[/bold red]"
-        )
+        console.print("[bold red]QuestDNA model is not available. Check packages/core/models.py.[/bold red]")
         return
 
     if not project_id:
@@ -2840,10 +2603,7 @@ def quest_progress(node_id, quest_id, project_id, completed, force):
     )
 
     if not quest_payload:
-        console.print(
-            "[bold red]No QuestDNA found. Generate one first with:[/bold red]\n"
-            "[cyan]camera quest generate --save[/cyan]"
-        )
+        console.print("[bold red]No QuestDNA found. Generate one first with:[/bold red]\n[cyan]camera quest generate --save[/cyan]")
         return
 
     try:
@@ -2875,14 +2635,9 @@ def quest_progress(node_id, quest_id, project_id, completed, force):
     _quest_print_progress_result(result)
 
     if result.get("success"):
-        console.print(
-            "\n[bold green]✅ The story physically changed the World State.[/bold green]\n"
-            "[bold cyan]Pure mathematical narrative. Zero hardcoded scripts.[/bold cyan]\n"
-        )
+        console.print("\n[bold green]✅ The story physically changed the World State.[/bold green]\n[bold cyan]Pure mathematical narrative. Zero hardcoded scripts.[/bold cyan]\n")
     else:
-        console.print(
-            "\n[bold red]❌ Node completion failed. Read the report above.[/bold red]\n"
-        )
+        console.print("\n[bold red]❌ Node completion failed. Read the report above.[/bold red]\n")
 
 
 # ==========================================
@@ -2896,17 +2651,9 @@ def social():
 
 @social.command(name="demo")
 def social_demo():
-    """
-    Print the deterministic demo SocialDNA.
-
-    Example:
-    camera social demo
-    """
+    """Print the deterministic demo SocialDNA."""
     if SocialDNA is None:
-        console.print(
-            "[bold red]Day 33 SocialDNA is not available. "
-            "Check packages/core/models.py.[/bold red]"
-        )
+        console.print("[bold red]Day 33 SocialDNA is not available. Check packages/core/models.py.[/bold red]")
         return
 
     dna = _social_demo_dna()
@@ -2934,36 +2681,15 @@ def social_demo():
 
 
 @social.command(name="matrix")
-@click.option(
-    "--file",
-    "file_path",
-    default=None,
-    help="Optional path to a SocialDNA JSON file."
-)
-@click.option(
-    "--project-id",
-    default=None,
-    help="Optional Supabase project UUID."
-)
+@click.option("--file", "file_path", default=None, help="Optional path to a SocialDNA JSON file.")
+@click.option("--project-id", default=None, help="Optional Supabase project UUID.")
 def social_matrix(file_path, project_id):
-    """
-    Print the social matrix edges and dispositions.
-
-    Examples:
-    camera social matrix
-    camera social matrix --file social_dna.json
-    """
+    """Print the social matrix edges and dispositions."""
     if SocialDNA is None or SocialMatrixEngine is None:
-        console.print(
-            "[bold red]Day 33 Social Matrix is not available. "
-            "Check packages/core/models.py and packages/core/social_engine.py.[/bold red]"
-        )
+        console.print("[bold red]Day 33 Social Matrix is not available. Check packages/core/models.py and packages/core/social_engine.py.[/bold red]")
         return
 
-    dna, source = _social_load_dna(
-        file_path=file_path,
-        project_id=project_id
-    )
+    dna, source = _social_load_dna(file_path=file_path, project_id=project_id)
 
     if dna is None:
         console.print("[bold red]Could not load SocialDNA.[/bold red]")
@@ -2980,66 +2706,23 @@ def social_matrix(file_path, project_id):
     )
 
     _social_print_edges(engine, dna)
-    _social_print_disposition_table(
-        engine=engine,
-        social_dna=dna,
-        actor_id="player",
-        title="Player Dispositions",
-    )
+    _social_print_disposition_table(engine=engine, social_dna=dna, actor_id="player", title="Player Dispositions")
 
 
 @social.command(name="ripple")
 @click.argument("action", required=True)
-@click.option(
-    "--actor",
-    default="player",
-    show_default=True,
-    help="The entity performing the action."
-)
-@click.option(
-    "--target",
-    default="faction_merchants_guild",
-    show_default=True,
-    help="The faction or entity receiving the action."
-)
-@click.option(
-    "--magnitude",
-    default=0.8,
-    show_default=True,
-    type=float,
-    help="Strength of the action. Positive or negative."
-)
-@click.option(
-    "--file",
-    "file_path",
-    default=None,
-    help="Optional path to a SocialDNA JSON file."
-)
-@click.option(
-    "--project-id",
-    default=None,
-    help="Optional Supabase project UUID."
-)
+@click.option("--actor", default="player", show_default=True, help="The entity performing the action.")
+@click.option("--target", default="faction_merchants_guild", show_default=True, help="The faction or entity receiving the action.")
+@click.option("--magnitude", default=0.8, show_default=True, type=float, help="Strength of the action.")
+@click.option("--file", "file_path", default=None, help="Optional path to a SocialDNA JSON file.")
+@click.option("--project-id", default=None, help="Optional Supabase project UUID.")
 def social_ripple(action, actor, target, magnitude, file_path, project_id):
-    """
-    Simulate a social action and print the mathematical ripple.
-
-    Examples:
-    camera social ripple help
-    camera social ripple help --target faction_merchants_guild --magnitude 0.8
-    camera social ripple steal --target faction_merchants_guild --magnitude -0.7
-    """
+    """Simulate a social action and print the mathematical ripple."""
     if SocialDNA is None or SocialAction is None or SocialMatrixEngine is None:
-        console.print(
-            "[bold red]Day 33 Social Ripple Resolver is not available. "
-            "Check packages/core/models.py and packages/core/social_engine.py.[/bold red]"
-        )
+        console.print("[bold red]Day 33 Social Ripple Resolver is not available. Check packages/core/models.py and packages/core/social_engine.py.[/bold red]")
         return
 
-    dna, source = _social_load_dna(
-        file_path=file_path,
-        project_id=project_id
-    )
+    dna, source = _social_load_dna(file_path=file_path, project_id=project_id)
 
     if dna is None:
         console.print("[bold red]Could not load SocialDNA.[/bold red]")
@@ -3064,27 +2747,16 @@ def social_ripple(action, actor, target, magnitude, file_path, project_id):
     )
 
     if target not in engine.get_entity_ids():
-        console.print(
-            f"[yellow]Target '{target}' is not in the loaded society. "
-            f"The Social Engine will add it as a new entity.[/yellow]"
-        )
+        console.print(f"[yellow]Target '{target}' is not in the loaded society. The Social Engine will add it as a new entity.[/yellow]")
 
-    _social_print_disposition_table(
-        engine=engine,
-        social_dna=dna,
-        actor_id=actor,
-        title="Before Action",
-    )
+    _social_print_disposition_table(engine=engine, social_dna=dna, actor_id=actor, title="Before Action")
 
     social_action = SocialAction(
         actor_id=actor,
         target_id=target,
         action_type=action,
         magnitude=magnitude,
-        context={
-            "source": "camera_cli",
-            "day": 33,
-        },
+        context={"source": "camera_cli", "day": 33},
     )
 
     report = engine.apply_action(social_action)
@@ -3092,42 +2764,194 @@ def social_ripple(action, actor, target, magnitude, file_path, project_id):
     _social_print_direct_effects(report, dna)
     _social_print_ripple_effects(report, dna)
 
-    _social_print_disposition_table(
-        engine=engine,
-        social_dna=dna,
-        actor_id=actor,
-        title="After Action",
-    )
+    _social_print_disposition_table(engine=engine, social_dna=dna, actor_id=actor, title="After Action")
 
     _social_print_interaction_blocks(engine, dna)
 
-    # ==================================================
-    # SPECIAL DEMO CHECK
-    # ==================================================
-    # If the demo society is active, show the emergent Ivan refusal.
-    # ==================================================
     if engine.get_faction("faction_iron_guard") is not None:
         ivan_can_interact = engine.can_interact("npc_ivan", actor)
         guard_disposition = engine.get_relationship("faction_iron_guard", actor)
 
         if ivan_can_interact:
-            console.print(
-                "[green]NPC Ivan is still willing to interact with the actor.[/green]"
-            )
+            console.print("[green]NPC Ivan is still willing to interact with the actor.[/green]")
         else:
-            console.print(
-                "[red]NPC Ivan now refuses interaction with the actor.[/red]"
-            )
+            console.print("[red]NPC Ivan now refuses interaction with the actor.[/red]")
 
-        console.print(
-            f"[cyan]Iron Guard disposition toward actor:[/cyan] "
-            f"[magenta]{guard_disposition:.2f}[/magenta]"
-        )
+        console.print(f"[cyan]Iron Guard disposition toward actor:[/cyan] [magenta]{guard_disposition:.2f}[/magenta]")
 
-    console.print(
-        "\n[bold green]✅ Social ripple complete.[/bold green]\n"
-        "[bold cyan]Drama emerged from math. Zero hardcoded reputation. Your i3 laptop is safe.[/bold cyan]\n"
+    console.print("\n[bold green]✅ Social ripple complete.[/bold green]\n[bold cyan]Drama emerged from math. Zero hardcoded reputation. Your i3 laptop is safe.[/bold cyan]\n")
+
+
+# ==========================================
+# DAY 34: THE LIVING WORLD TRINITY (ECOLOGY & FLOW)
+# ==========================================
+@cli.group()
+def ecology():
+    """Day 34: Living World Trinity - Ecology Commands."""
+    pass
+
+@ecology.command(name="simulate")
+@click.argument('ticks', type=int, default=10)
+def ecology_simulate(ticks):
+    """Simulates the ecosystem for X ticks using Lotka-Volterra math."""
+    if simulate_tick is None or EcologyDNA is None:
+        console.print("[bold red]Day 34 Ecology Engine is not available.[/bold red]")
+        return
+
+    console.print(Panel(f"[bold cyan]Day 34: Simulating Ecosystem for {ticks} ticks...[/bold cyan]", title="The Lotka-Volterra Engine"))
+    
+    dna = EcologyDNA(
+        species_list=["vegetation", "deer", "wolves"],
+        predator_prey_links=[("wolves", "deer"), ("deer", "vegetation")],
+        hunger_rates={"deer": 0.5, "wolves": 1.0},
+        reproduction_cycles={"vegetation": 2, "deer": 5, "wolves": 10},
+        territory_ranges={"deer": 10.0, "wolves": 50.0},
+        carrying_capacity={"vegetation": 1000, "deer": 100, "wolves": 20}
     )
+    
+    pops = {"vegetation": 500, "deer": 50, "wolves": 10}
+    
+    table = Table(title="Population Curves")
+    table.add_column("Tick", style="cyan", justify="center")
+    table.add_column("Vegetation", style="green")
+    table.add_column("Deer", style="yellow")
+    table.add_column("Wolves", style="red")
+    table.add_column("Events", style="magenta")
+    
+    for i in range(ticks):
+        pops, events = simulate_tick(pops, dna)
+        event_str = ", ".join([e.event_type for e in events]) if events else "-"
+        table.add_row(
+            str(i + 1),
+            str(pops.get("vegetation", 0)),
+            str(pops.get("deer", 0)),
+            str(pops.get("wolves", 0)),
+            event_str
+        )
+        
+    console.print(table)
+    console.print("[bold green]✅ Ecosystem simulation complete. The math is breathing![/bold green]")
+
+@ecology.command(name="collapse")
+@click.argument('species')
+def ecology_collapse(species):
+    """Manually collapses a species to 0 and triggers the trophic cascade."""
+    if resolve_cascade is None or EcologyDNA is None or BiomeDNA is None:
+        console.print("[bold red]Day 34 Ecology Engine is not available.[/bold red]")
+        return
+
+    console.print(Panel(f"[bold red]Day 34: Triggering Trophic Cascade for '{species}'...[/bold red]", title="The Cascade Resolver"))
+    
+    dna = EcologyDNA(
+        species_list=["vegetation", "deer", "wolves"],
+        predator_prey_links=[("wolves", "deer"), ("deer", "vegetation")],
+        carrying_capacity={"vegetation": 1000, "deer": 100, "wolves": 20}
+    )
+    
+    pops = {"vegetation": 100, "deer": 50, "wolves": 10}
+    
+    if species not in pops:
+        console.print(f"[yellow]Species '{species}' not found in demo biome. Available: {list(pops.keys())}[/yellow]")
+        return
+        
+    pops[species] = 0
+    console.print(f"[yellow]Manually set {species} population to 0.[/yellow]")
+    
+    current_biome = BiomeDNA(name="Lush Forest", scatter_density=0.8)
+    
+    new_pops, new_biome, cascade_events = resolve_cascade(pops, dna, current_biome)
+    
+    table = Table(title="Cascade Chain Reactions")
+    table.add_column("Event Type", style="red")
+    table.add_column("Target", style="cyan")
+    table.add_column("Message", style="white")
+    
+    if not cascade_events:
+        table.add_row("None", "-", "The ecosystem absorbed the shock.")
+    else:
+        for event in cascade_events:
+            table.add_row(event.event_type, event.target_species, event.message)
+            
+    console.print(table)
+    
+    if new_biome.name != current_biome.name:
+        console.print(f"[bold red]🚨 BIOME COLLAPSE! The world physically changed to: {new_biome.name}[/bold red]")
+        
+    console.print("[bold green]✅ Cascade resolved. The world reacted deterministically![/bold green]")
+
+
+@cli.group()
+def flow():
+    """Day 34: Living World Trinity - Flow State Commands."""
+    pass
+
+@flow.command(name="check")
+def flow_check():
+    """Reads mock telemetry and calculates the current Flow Score."""
+    if calculate_flow_score is None:
+        console.print("[bold red]Day 34 Flow Engine is not available.[/bold red]")
+        return
+
+    console.print(Panel("[bold cyan]Day 34: Checking Player Flow State...[/bold cyan]", title="The Csikszentmihalyi Engine"))
+    
+    flow_dna = calculate_flow_score(
+        failure_count=2,
+        hesitation_ms=150.0,
+        session_minutes=20,
+        recent_success_rate=0.8,
+        current_challenge=0.7
+    )
+    
+    table = Table(title="Player Psychological State")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="magenta")
+    
+    table.add_row("Skill Level", f"{flow_dna.skill_level:.2f}")
+    table.add_row("Challenge Level", f"{flow_dna.challenge_level:.2f}")
+    table.add_row("Flow Score", f"{flow_dna.flow_score:.1f} / 100")
+    table.add_row("Pacing Directive", f"[bold]{flow_dna.pacing_directive.value}[/bold]")
+    
+    console.print(table)
+    console.print("[bold green]✅ Flow state calculated. The engine knows how the player feels.[/bold green]")
+
+@flow.command(name="simulate")
+@click.argument('scenario')
+def flow_simulate(scenario):
+    """Simulates a specific player scenario and prints the Brain's pacing response."""
+    if calculate_flow_score is None or generate_pacing_directive is None:
+        console.print("[bold red]Day 34 Flow Engine or Brain is not available.[/bold red]")
+        return
+
+    console.print(Panel(f"[bold cyan]Day 34: Simulating Scenario: '{scenario}'...[/bold cyan]", title="The Pacing Director"))
+    
+    if "bored" in scenario.lower():
+        success, challenge, minutes, hesitation = 0.95, 0.2, 60, 50.0
+    elif "frustrated" in scenario.lower() or "hard" in scenario.lower():
+        success, challenge, minutes, hesitation = 0.2, 0.9, 15, 800.0
+    elif "tired" in scenario.lower() or "long" in scenario.lower():
+        success, challenge, minutes, hesitation = 0.4, 0.6, 50, 300.0
+    else:
+        success, challenge, minutes, hesitation = 0.7, 0.7, 20, 100.0
+        
+    flow_dna = calculate_flow_score(
+        failure_count=3 if success < 0.5 else 0,
+        hesitation_ms=hesitation,
+        session_minutes=minutes,
+        recent_success_rate=success,
+        current_challenge=challenge
+    )
+    
+    console.print(f"[yellow]Calculated Flow Score: {flow_dna.flow_score:.1f}[/yellow]")
+    console.print(f"[yellow]Pacing Directive: {flow_dna.pacing_directive.value}[/yellow]\n")
+    
+    with console.status("[bold green]Brain is generating deterministic JSON directives...[/bold green]"):
+        pacing_response = generate_pacing_directive(flow_dna)
+        
+    console.print("[bold magenta]--- 🧠 BRAIN JSON DIRECTIVES ---[/bold magenta]")
+    syntax = Syntax(json.dumps(pacing_response, indent=2), "json", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="Engine Execution Payload", border_style="green"))
+    
+    console.print("\n[bold green]✅ Pacing Director issued commands. Zero raw code written by the Brain![/bold green]")
 
 
 # CRITICAL: Add the new command groups to the main 'cli' group!
@@ -3146,6 +2970,8 @@ cli.add_command(chrono) # Day 30 Addition
 cli.add_command(accessibility) # Day 31 Addition
 cli.add_command(quest) # Day 32 Addition
 cli.add_command(social) # Day 33 Addition
+cli.add_command(ecology) # Day 34 Addition
+cli.add_command(flow) # Day 34 Addition
 
 # ==========================================
 # 3. START THE ENGINE

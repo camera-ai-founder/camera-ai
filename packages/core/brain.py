@@ -9,7 +9,7 @@ from groq import Groq
 from supabase import create_client, Client
 
 # ==========================================
-# DAY 11 to DAY 33 IMPORTS: The Blueprints
+# DAY 11 to DAY 34 IMPORTS: The Blueprints
 # ==========================================
 from .models import (
     WorldState,
@@ -49,7 +49,9 @@ from .models import (
     FactionDNA,
     RelationshipTensor,
     SocialRule,
-    SocialAction
+    SocialAction,
+    FlowDNA,
+    PacingDirective
 )
 
 # ==========================================
@@ -302,13 +304,6 @@ def get_world_state(project_id: Optional[str] = None) -> WorldState:
 def _resolve_world_state_value(current_value: Any, mutation_value: Any) -> Any:
     """
     Deterministic mutation resolver for Day 11 World State.
-
-    Supports:
-    - direct replacement
-    - {"$set": value}
-    - {"$add": number}
-    - {"$sub": number}
-    - {"$multiply": number}
     """
     if not isinstance(mutation_value, dict):
         return mutation_value
@@ -350,20 +345,6 @@ def update_world_state(
 ) -> Any:
     """
     Day 11 World State updater.
-
-    This function is now flexible so it can be used by:
-    1. Old code:
-       update_world_state(project_id, changes_dict)
-
-    2. Day 32 Narrative Engine:
-       update_world_state(world_state, mutations)
-
-    3. Explicit safe keyword form:
-       update_world_state(
-           project_id=project_id,
-           world_state=world_state,
-           mutations=mutations
-       )
     """
     resolved_project_id = project_id
     resolved_changes = mutations if mutations is not None else changes_dict
@@ -1817,22 +1798,6 @@ No explanations.
 # ==========================================
 # DAY 32: THE STORY WEAVER (QUEST HOLE)
 # ==========================================
-# The Story Weaver generates QuestDNA.
-#
-# It NEVER writes dialogue.
-# It NEVER writes hardcoded quest scripts.
-# It NEVER writes branching text trees.
-#
-# It outputs only:
-# - semantic story concepts
-# - graph nodes
-# - graph edges
-# - deterministic completion conditions
-# - deterministic World State mutations
-#
-# The Narrative Engine then validates the graph as a DAG.
-# ==========================================
-
 QUEST_SYSTEM_PROMPT = f"""
 You are the Story Weaver inside the Ontological Genesis Engine.
 
@@ -2044,13 +2009,7 @@ def generate_quest_dna_report(
     world_state: Optional[WorldState] = None
 ) -> Dict[str, Any]:
     """
-    Generate QuestDNA using:
-    1. Day 11 World State
-    2. Day 13 Context Pruning / World Truths
-    3. Groq JSON forcing
-    4. Pydantic validation
-    5. Day 32 DAG validation
-    6. Self-correction loop
+    Generate QuestDNA using Groq, Pydantic, and DAG validation.
     """
     if not client:
         return {
@@ -2239,8 +2198,6 @@ def generate_quest_dna(
 ) -> Optional[QuestDNA]:
     """
     Convenience wrapper.
-
-    Returns only the validated QuestDNA object, or None if generation fails.
     """
     report = generate_quest_dna_report(
         quest_intent=quest_intent,
@@ -2302,22 +2259,6 @@ def progress_quest_node(
 # ==========================================
 # DAY 33: THE SOCIOLOGIST DIRECTOR (SOCIAL HOLE)
 # ==========================================
-# The Sociologist Director generates SocialDNA.
-#
-# It NEVER writes:
-# - static dialogue trees
-# - hardcoded reputation numbers
-# - scripted faction reactions
-# - raw quest text
-#
-# It outputs only:
-# - factions
-# - weighted relationship tensors
-# - social ripple rules
-#
-# The Social Engine then computes consequences deterministically.
-# ==========================================
-
 SOCIOLOGIST_DIRECTOR_SYSTEM_PROMPT = f"""
 You are the Sociologist Director inside the Ontological Genesis Engine.
 
@@ -2387,9 +2328,6 @@ Return JSON using this exact shape:
 
 
 def _slug(text: str) -> str:
-    """
-    Create a stable snake_case ID from text.
-    """
     text = str(text or "").strip().lower()
 
     if not text:
@@ -2414,9 +2352,6 @@ def _slug(text: str) -> str:
 
 
 def _clamp_social_weight(value: Any) -> float:
-    """
-    Clamp social relationship weights to the safe range.
-    """
     try:
         return max(-1.0, min(1.0, float(value)))
     except Exception:
@@ -2424,9 +2359,6 @@ def _clamp_social_weight(value: Any) -> float:
 
 
 def _clamp_social_confidence(value: Any) -> float:
-    """
-    Clamp confidence to the safe range.
-    """
     try:
         return max(0.0, min(1.0, float(value)))
     except Exception:
@@ -2434,9 +2366,6 @@ def _clamp_social_confidence(value: Any) -> float:
 
 
 def _clamp_rule_multiplier(value: Any) -> float:
-    """
-    Clamp social rule multipliers to prevent chaotic escalation.
-    """
     try:
         return max(-5.0, min(5.0, float(value)))
     except Exception:
@@ -2444,9 +2373,6 @@ def _clamp_rule_multiplier(value: Any) -> float:
 
 
 def _normalize_social_payload(data: Any, faction_count: int = 3) -> Dict[str, Any]:
-    """
-    Normalize raw AI JSON into safe SocialDNA-shaped data.
-    """
     if not isinstance(data, dict):
         raise ValueError("SocialDNA JSON root must be an object.")
 
@@ -2606,9 +2532,6 @@ def _normalize_social_payload(data: Any, faction_count: int = 3) -> Dict[str, An
 
 
 def _sanitize_social_dna(social_dna: SocialDNA) -> SocialDNA:
-    """
-    Protect SocialDNA from invalid or missing pieces after validation.
-    """
     if social_dna.factions is None:
         social_dna.factions = []
 
@@ -2705,11 +2628,6 @@ def _fallback_social_dna(
     faction_count: int = 3,
     seed: Optional[str] = None
 ) -> SocialDNA:
-    """
-    Deterministic fallback society.
-
-    This protects the Founder's peace if Groq is unavailable.
-    """
     faction_count = max(1, min(int(faction_count), 5))
 
     base_factions = [
@@ -2793,15 +2711,6 @@ def generate_social_dna_report(
     project_id: Optional[str] = None,
     world_state: Optional[WorldState] = None
 ) -> Dict[str, Any]:
-    """
-    Generate SocialDNA using:
-    1. Day 11 World State
-    2. Day 13 Context Pruning / World Truths
-    3. Groq JSON forcing
-    4. Pydantic validation
-    5. Day 33 Social Matrix validation
-    6. Self-correction loop
-    """
     faction_count = max(1, min(int(faction_count), 6))
 
     if not client:
@@ -3005,11 +2914,6 @@ def generate_social_dna(
     project_id: Optional[str] = None,
     world_state: Optional[WorldState] = None
 ) -> SocialDNA:
-    """
-    Convenience wrapper.
-
-    Always returns a safe SocialDNA object.
-    """
     report = generate_social_dna_report(
         context=context,
         faction_count=faction_count,
@@ -3037,9 +2941,6 @@ def act_as_sociologist_director(
     project_id: Optional[str] = None,
     world_state: Optional[WorldState] = None
 ) -> SocialDNA:
-    """
-    Friendly alias for the Sociologist Director.
-    """
     return generate_social_dna(
         context=context,
         faction_count=faction_count,
@@ -3057,9 +2958,6 @@ def generate_city_social_dna(
     project_id: Optional[str] = None,
     world_state: Optional[WorldState] = None
 ) -> SocialDNA:
-    """
-    Generate the social web for a city.
-    """
     context = f"City: {city_name}\nDescription: {description}".strip()
 
     return generate_social_dna(
@@ -3079,9 +2977,6 @@ def generate_faction_social_dna(
     project_id: Optional[str] = None,
     world_state: Optional[WorldState] = None
 ) -> SocialDNA:
-    """
-    Generate or integrate a faction into a social web.
-    """
     existing = existing_faction_names or []
 
     context_lines = [
@@ -3115,3 +3010,61 @@ def generate_faction_social_dna(
         project_id=project_id,
         world_state=world_state
     )
+
+
+# ==========================================
+# DAY 34: THE PACING DIRECTOR (FLOW STATE INTEGRATION)
+# ==========================================
+def generate_pacing_directive(flow_dna: FlowDNA) -> dict:
+    """
+    The Pacing Director reads the FlowDNA and outputs specific JSON directives 
+    for the existing engines (Drama Budget, Cinematographer, Audio, Tutorial) to execute.
+    
+    The Brain NEVER writes raw code. It only outputs deterministic data.
+    """
+    if not isinstance(flow_dna, FlowDNA):
+        print("Error: Pacing Director requires a valid FlowDNA object.")
+        return {"directive": "maintain_flow", "actions": []}
+
+    directive = flow_dna.pacing_directive.value
+    
+    # Base structure for the output
+    pacing_response = {
+        "directive": directive,
+        "flow_score": flow_dna.flow_score,
+        "actions": []
+    }
+
+    if directive == "increase_tension":
+        pacing_response["actions"] = [
+            {"engine": "drama_budget", "action": "increase_enemy_spawn_rate", "multiplier": 1.5},
+            {"engine": "narrative", "action": "spawn_mystery_event", "intensity": "high"},
+            {"engine": "cinematographer", "action": "shift_camera", "style": "dynamic_handheld", "fov": 85}
+        ]
+        pacing_response["audio_mood"] = "tense_ambient"
+        
+    elif directive == "reduce_difficulty":
+        pacing_response["actions"] = [
+            {"engine": "drama_budget", "action": "decrease_enemy_count", "multiplier": 0.5},
+            {"engine": "cinematographer", "action": "shift_camera", "style": "smooth_steady", "fov": 75},
+            {"engine": "tutorial", "action": "offer_contextual_hint", "delay_ms": 2000}
+        ]
+        pacing_response["audio_mood"] = "calm_ambient"
+        
+    elif directive == "quiet_moment":
+        pacing_response["actions"] = [
+            {"engine": "drama_budget", "action": "clear_hostiles", "radius": 100.0},
+            {"engine": "cinematographer", "action": "show_vista", "duration_seconds": 5.0, "style": "cinematic_pan"},
+            {"engine": "narrative", "action": "trigger_environmental_storytelling", "type": "peaceful"}
+        ]
+        pacing_response["audio_mood"] = "soft_acoustic"
+        
+    else: # maintain_flow
+        pacing_response["actions"] = [
+            {"engine": "narrative", "action": "deepen_immersion", "method": "subtle_details"},
+            {"engine": "cinematographer", "action": "maintain_current_rhythm"}
+        ]
+        pacing_response["audio_mood"] = "current_theme"
+
+    print(f"[PACING DIRECTOR] 🎬 Flow Score: {flow_dna.flow_score:.1f} | Directive: {directive.upper()}")
+    return pacing_response
