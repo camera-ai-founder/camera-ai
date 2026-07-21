@@ -3068,3 +3068,69 @@ def generate_pacing_directive(flow_dna: FlowDNA) -> dict:
 
     print(f"[PACING DIRECTOR] 🎬 Flow Score: {flow_dna.flow_score:.1f} | Directive: {directive.upper()}")
     return pacing_response
+    # ==============================================================================
+# DAY 35: INFINITE CONTENT WEAVER - DIRECTOR AI PROMPT (APPEND ONLY)
+# ==============================================================================
+
+def generate_director_prompt(
+    dna,           # ContentWeaverDNA
+    flow_state,    # FlowDNA
+    ecology_state: dict,
+    social_state: dict,
+    narrative_state: dict,
+    pacing_directive: str
+) -> str:
+    """
+    Generates a structured prompt for Groq (the Director AI).
+    The Brain outputs the 'what' of the moment.
+    The Content Weaver packages it.
+    The existing engines execute it.
+    
+    RULE: The AI must output ONLY JSON directives. No code. No raw text.
+    """
+    
+    # 1. Build human-readable summaries of each engine's current state
+    flow_score = flow_state.flow_score
+    
+    ecology_summary = f"Species active: {len(ecology_state.get('species_list', []))}"
+    
+    social_summary = f"Factions present: {len(social_state.get('factions', []))}"
+    
+    narrative_node = narrative_state.get("current_node", "unknown")
+    
+    # 2. Construct the Director Prompt
+    prompt = f"""You are the Director of a living, breathing world.
+
+CURRENT WORLD STATE:
+- Flow Score: {flow_score}/100
+- Ecology: {ecology_summary}
+- Social Matrix: {social_summary}
+- Narrative Node: {narrative_node}
+- Pacing Directive: {pacing_directive}
+- Moment Intensity: {dna.intensity}
+- Trigger Source: {dna.trigger_source.value if hasattr(dna.trigger_source, 'value') else dna.trigger_source}
+- Emotional Arc: {dna.emotional_arc.value if hasattr(dna.emotional_arc, 'value') else dna.emotional_arc}
+
+YOUR TASK:
+Generate a cinematic, emotional, reactive moment that fits the pacing directive above.
+You are a conductor, not a composer. You coordinate existing systems.
+
+OUTPUT FORMAT (STRICT):
+Output ONLY a valid JSON object with these exact keys:
+{{
+    "cinematographer": {{"action": "...", "fov": 70, "description": "..."}},
+    "audio": {{"track": "...", "volume": 0.7, "description": "..."}},
+    "ecology": {{"event": "...", "description": "..."}},
+    "social": {{"event": "...", "description": "..."}},
+    "narrative": {{"event": "...", "description": "..."}},
+    "economy": {{"event": "...", "description": "..."}}
+}}
+
+RULES:
+1. Do NOT write code.
+2. Do NOT write raw text outside the JSON.
+3. Output ONLY the JSON object.
+4. Every description must be cinematic and emotionally resonant.
+5. The moment must feel ALIVE, not mechanical."""
+
+    return prompt

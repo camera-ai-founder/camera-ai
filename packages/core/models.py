@@ -645,3 +645,56 @@ class RewindIntent(BaseModel):
     model_config = ConfigDict(extra="allow")
     target_timestamp: float = Field(..., description="The exact game-time (in seconds) the player wants to rewind to.")
     reason: str = Field(default="manual", description="Why the rewind was triggered (e.g., 'manual', 'player_death').")
+
+    # ==============================================================================
+# DAY 35: INFINITE CONTENT WEAVER (PILLAR 22) - APPEND ONLY
+# ==============================================================================
+
+class TriggerSource(str, Enum):
+    """Where did the spark for this moment come from?"""
+    ECOLOGY = "ecology"
+    SOCIAL = "social"
+    NARRATIVE = "narrative"
+    FLOW = "flow"
+    ECONOMY = "economy"
+    RANDOM = "random"
+
+class EmotionalArc(str, Enum):
+    """The shape of the player's emotion during this moment."""
+    RISING = "rising"     # Tension building (chase, mystery)
+    FALLING = "falling"   # Tension releasing (aftermath)
+    PEAK = "peak"         # Climax (boss fight, revelation)
+    VALLEY = "valley"     # Calm (rest, reflection)
+    TWIST = "twist"       # Surprise (betrayal, sudden discovery)
+
+class ContentWeaverDNA(BaseModel):
+    """
+    The DNA of a Moment. This is the 'Conductor's Baton'.
+    It doesn't play the music; it tells the musicians (engines) when to play.
+    """
+    moment_id: str
+    trigger_source: TriggerSource
+    intensity: float = Field(ge=0.0, le=1.0) # 0.0 is whisper, 1.0 is scream
+    affected_systems: List[str] # e.g., ["cinematographer", "audio", "ecology"]
+    duration_ticks: int
+    emotional_arc: EmotionalArc
+
+class AAAMoment(BaseModel):
+    """
+    The fully orchestrated event.
+    Contains specific directives for every engine involved.
+    """
+    moment_id: str
+    timestamp: datetime
+    trigger_source: str
+    
+    # Directives are JSON strings to keep the schema flexible for different engines
+    cinematographer_directive: str 
+    audio_directive: str
+    ecology_directive: str
+    social_directive: str
+    narrative_directive: str
+    economy_directive: str
+    tutorial_directive: Optional[str] = None
+    
+    resolved: bool = False
