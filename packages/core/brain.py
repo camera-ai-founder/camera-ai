@@ -3155,3 +3155,517 @@ Output ONLY the FidelityDNA JSON.
 Do NOT write raw code. Do NOT write explanations. Do NOT include markdown formatting like ```json.
 """
     return prompt
+   # ==============================================================================
+# DAY 37: UNIVERSAL DIRECTOR BRAIN UPGRADE (PILLAR 24) - APPEND ONLY
+# ==============================================================================
+# This block is additive.
+# It does NOT modify existing brain functions.
+# It gives the Brain the ability to choose a Universal Domain.
+# ==============================================================================
+
+import os
+import re
+import json
+
+try:
+    from groq import Groq
+except Exception:
+    Groq = None
+
+
+UNIVERSAL_DIRECTOR_SYSTEM_PROMPT = """
+You are the Universal Director inside the Ontological Genesis Framework.
+
+Your job is to read the user's request and choose the correct reality domain.
+
+You must output ONLY valid JSON.
+
+Do NOT write code.
+Do NOT write explanations.
+Do NOT write markdown.
+Do NOT guess uncertain details.
+Do NOT output raw text.
+Do NOT recommend Unity, Unreal, Godot, or any external engine.
+
+Use this JSON shape:
+
+{
+  "project_name": "string",
+  "domain": "game | saas | desktop | mobile | vr | film | science | music | architecture | education",
+  "sub_type": "string",
+  "required_engines": [],
+  "hardware_tier": "potato | mid | high | ultra | cloud",
+  "target_platform": "web | desktop | mobile | vr | all"
+}
+
+Rules:
+1. If the user wants a game, RPG, FPS, puzzle, platformer, strategy, or interactive world, choose domain "game".
+2. If the user wants an app, dashboard, CRM, SaaS, admin panel, analytics, project management, or ecommerce system, choose domain "saas".
+3. If unsure, default to domain "saas".
+4. Always protect the i3 laptop by defaulting hardware_tier to "potato" unless the user clearly requests higher.
+5. Always default target_platform to "web" unless the user clearly requests another platform.
+6. required_engines must be empty unless the user explicitly names an OGF engine.
+""".strip()
+
+
+UNIVERSAL_ALLOWED_DOMAINS = {
+    "game",
+    "saas",
+    "desktop",
+    "mobile",
+    "vr",
+    "film",
+    "science",
+    "music",
+    "architecture",
+    "education",
+}
+
+UNIVERSAL_ALLOWED_HARDWARE_TIERS = {
+    "potato",
+    "mid",
+    "high",
+    "ultra",
+    "cloud",
+}
+
+UNIVERSAL_ALLOWED_PLATFORMS = {
+    "web",
+    "desktop",
+    "mobile",
+    "vr",
+    "all",
+}
+
+
+def _clean_project_name(user_request):
+    """
+    Create a safe project name from the user's request.
+    """
+    safe_request = str(user_request or "").strip()
+    words = safe_request.split()
+
+    if not words:
+        return "Untitled Reality"
+
+    name = " ".join(words[:5])
+    name = name.strip(".,!?;:\"'()[]{}")
+
+    if not name:
+        return "Untitled Reality"
+
+    return name.title()
+
+
+def deterministic_universal_fallback(user_request):
+    """
+    Deterministic fallback if Groq is unavailable or returns invalid JSON.
+
+    This protects the algorithm.
+    The system never breaks.
+    """
+    text = str(user_request or "").lower()
+    project_name = _clean_project_name(user_request)
+
+    domain = "saas"
+    sub_type = "general"
+
+    # Game domain.
+    if any(word in text for word in [
+        "game",
+        "rpg",
+        "fps",
+        "shooter",
+        "puzzle",
+        "platformer",
+        "strategy",
+        "open world",
+        "cyberpunk",
+        "fantasy",
+        "combat",
+        "quest",
+    ]):
+        domain = "game"
+
+        if any(word in text for word in ["rpg", "open world", "cyberpunk", "fantasy"]):
+            sub_type = "open_world_rpg"
+        elif any(word in text for word in ["fps", "shooter", "gun", "combat"]):
+            sub_type = "fps"
+        elif "puzzle" in text:
+            sub_type = "puzzle"
+        elif "strategy" in text:
+            sub_type = "strategy"
+        elif "platformer" in text:
+            sub_type = "platformer"
+        else:
+            sub_type = "open_world_rpg"
+
+    # SaaS domain.
+    elif any(word in text for word in [
+        "saas",
+        "dashboard",
+        "analytics",
+        "crm",
+        "project management",
+        "task",
+        "admin",
+        "ecommerce",
+        "e-commerce",
+        "shop",
+        "store",
+        "inventory",
+        "report",
+    ]):
+        domain = "saas"
+
+        if any(word in text for word in ["analytics", "dashboard", "metric", "report"]):
+            sub_type = "analytics_dashboard"
+        elif "crm" in text:
+            sub_type = "crm"
+        elif any(word in text for word in ["project", "task", "kanban", "management"]):
+            sub_type = "project_management"
+        elif any(word in text for word in ["ecommerce", "e-commerce", "shop", "store", "product"]):
+            sub_type = "e_commerce"
+        else:
+            sub_type = "general"
+
+    # Other future domains.
+    elif any(word in text for word in ["vr", "virtual reality", "training sim"]):
+        domain = "vr"
+        sub_type = "training_sim"
+
+    elif any(word in text for word in ["film", "movie", "cinematic", "animation", "short"]):
+        domain = "film"
+        sub_type = "animated_short"
+
+    elif any(word in text for word in ["science", "molecular", "simulation", "physics sim"]):
+        domain = "science"
+        sub_type = "molecular_sim"
+
+    elif any(word in text for word in ["music", "song", "composition", "audio tool"]):
+        domain = "music"
+        sub_type = "composition_tool"
+
+    elif any(word in text for word in ["architecture", "building", "walkthrough", "house"]):
+        domain = "architecture"
+        sub_type = "walkthrough"
+
+    elif any(word in text for word in ["education", "course", "tutorial", "learning"]):
+        domain = "education"
+        sub_type = "course"
+
+    elif any(word in text for word in ["desktop", "desktop app"]):
+        domain = "desktop"
+        sub_type = "general"
+
+    elif any(word in text for word in ["mobile", "android", "ios", "phone app"]):
+        domain = "mobile"
+        sub_type = "general"
+
+    return {
+        "project_name": project_name,
+        "domain": domain,
+        "sub_type": sub_type,
+        "required_engines": [],
+        "hardware_tier": "potato",
+        "target_platform": "web",
+        "source": "deterministic_fallback",
+    }
+
+
+def parse_universal_dna_json(response_text):
+    """
+    Safely parse UniversalDNA JSON from a model response.
+    """
+    if isinstance(response_text, dict):
+        data = response_text
+    else:
+        text = str(response_text or "").strip()
+
+        # Remove markdown fences if present.
+        text = text.replace("```json", "")
+        text = text.replace("```", "")
+
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+
+        if match:
+            text = match.group(0)
+
+        try:
+            data = json.loads(text)
+        except Exception:
+            data = {}
+
+    if not isinstance(data, dict):
+        data = {}
+
+    fallback = deterministic_universal_fallback(
+        data.get("project_name", "Untitled Reality")
+    )
+
+    project_name = str(data.get("project_name") or fallback["project_name"]).strip()
+    domain = str(data.get("domain") or fallback["domain"]).strip().lower()
+    sub_type = str(data.get("sub_type") or fallback["sub_type"]).strip().lower()
+    hardware_tier = str(data.get("hardware_tier") or fallback["hardware_tier"]).strip().lower()
+    target_platform = str(data.get("target_platform") or fallback["target_platform"]).strip().lower()
+
+    required_engines = data.get("required_engines", [])
+
+    if not isinstance(required_engines, list):
+        required_engines = []
+
+    required_engines = [str(engine) for engine in required_engines if engine]
+
+    if domain not in UNIVERSAL_ALLOWED_DOMAINS:
+        domain = "saas"
+
+    if hardware_tier not in UNIVERSAL_ALLOWED_HARDWARE_TIERS:
+        hardware_tier = "potato"
+
+    if target_platform not in UNIVERSAL_ALLOWED_PLATFORMS:
+        target_platform = "web"
+
+    if not project_name:
+        project_name = "Untitled Reality"
+
+    if not sub_type:
+        sub_type = "general"
+
+    return {
+        "project_name": project_name,
+        "domain": domain,
+        "sub_type": sub_type,
+        "required_engines": required_engines,
+        "hardware_tier": hardware_tier,
+        "target_platform": target_platform,
+    }
+
+
+def generate_universal_prompt(user_request):
+    """
+    Build the full Universal Director prompt.
+
+    This is the prompt that tells the Brain to output UniversalDNA JSON.
+    """
+    safe_request = str(user_request or "").strip()
+
+    if not safe_request:
+        safe_request = "Build a simple project management app."
+
+    return f"""
+{UNIVERSAL_DIRECTOR_SYSTEM_PROMPT}
+
+User request:
+{safe_request}
+
+Output ONLY valid JSON.
+""".strip()
+
+
+def generate_universal_dna(user_request, api_key=None, model="llama-3.1-8b-instant"):
+    """
+    Generate UniversalDNA from the user's request.
+
+    If Groq is available, use Groq.
+    If Groq fails, fall back to deterministic safety.
+    """
+    base_fallback = deterministic_universal_fallback(user_request)
+
+    active_client = globals().get("client", None)
+
+    if active_client is None:
+        api_key = api_key or os.environ.get("GROQ_API_KEY")
+
+        if Groq is not None and api_key:
+            try:
+                active_client = Groq(api_key=api_key)
+            except Exception:
+                active_client = None
+
+    if active_client is None:
+        return base_fallback
+
+    try:
+        completion = active_client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": UNIVERSAL_DIRECTOR_SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": str(user_request or ""),
+                },
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+
+        content = completion.choices[0].message.content
+        parsed = parse_universal_dna_json(content)
+
+        result = base_fallback.copy()
+        result.update(parsed)
+        result["source"] = "groq"
+
+        return result
+
+    except Exception as error:
+        result = base_fallback.copy()
+        result["source"] = "deterministic_fallback"
+        result["error"] = str(error)
+        return result
+
+
+# ==============================================================================
+# DAY 37 FINAL SAFETY PATCH: UNIVERSAL DNA SANITIZER - APPEND ONLY
+# ==============================================================================
+# This patch hardens the Universal Director output.
+# It rejects non-OGF engines like Unity, Unreal, Godot, etc.
+# It protects the i3 laptop by forcing potato unless explicitly requested.
+# It normalizes common game sub_types.
+# ==============================================================================
+
+UNIVERSAL_OGF_ENGINE_WHITELIST = {
+    "genesis_renderer",
+    "ecs",
+    "physics",
+    "audio",
+    "input",
+    "navigation",
+    "ecology",
+    "social",
+    "narrative",
+    "economy",
+    "flow",
+    "content_weaver",
+    "fidelity",
+    "cinematographer",
+    "ui_synthesizer",
+    "backend_compiler",
+    "security",
+    "deployment",
+    "localization",
+    "accessibility",
+    "sensory",
+    "telemetry",
+    "tutorial",
+}
+
+
+def sanitize_universal_dna(result, user_request=""):
+    """
+    Sanitize UniversalDNA output before it enters the Universal Compiler.
+
+    This protects:
+    - the i3 laptop,
+    - the OGF engine whitelist,
+    - the Anti-Tool Doctrine,
+    - and the deterministic routing table.
+    """
+    if not isinstance(result, dict):
+        return result
+
+    text = str(user_request or "").lower()
+
+    # Protect the i3 laptop.
+    # Default to potato unless the user explicitly asks for stronger hardware.
+    explicit_high_hardware = any(word in text for word in [
+        "high",
+        "ultra",
+        "cloud",
+        "powerful",
+        "gaming pc",
+        "high end",
+        "high-end",
+    ])
+
+    if not explicit_high_hardware:
+        result["hardware_tier"] = "potato"
+    else:
+        if result.get("hardware_tier") not in {
+            "potato",
+            "mid",
+            "high",
+            "ultra",
+            "cloud",
+        }:
+            result["hardware_tier"] = "potato"
+
+    # Default to web unless the user explicitly asks for another platform.
+    explicit_platform = any(word in text for word in [
+        "desktop",
+        "mobile",
+        "vr",
+        "virtual reality",
+        "android",
+        "ios",
+        "all platforms",
+        "all",
+    ])
+
+    if not explicit_platform:
+        result["target_platform"] = "web"
+    else:
+        if result.get("target_platform") not in {
+            "web",
+            "desktop",
+            "mobile",
+            "vr",
+            "all",
+        }:
+            result["target_platform"] = "web"
+
+    # Reject non-OGF engines.
+    required_engines = result.get("required_engines", [])
+
+    if not isinstance(required_engines, list):
+        required_engines = []
+
+    clean_engines = []
+
+    for engine in required_engines:
+        engine_slug = str(engine).lower().strip().replace(" ", "_")
+
+        if engine_slug in UNIVERSAL_OGF_ENGINE_WHITELIST:
+            clean_engines.append(engine_slug)
+
+    result["required_engines"] = clean_engines
+
+    # Normalize common game sub_types.
+    if result.get("domain") == "game":
+        sub_type = str(result.get("sub_type", "")).lower().strip()
+
+        if sub_type in {
+            "rpg",
+            "role_playing_game",
+            "role playing game",
+            "role-playing",
+            "role_playing",
+        }:
+            result["sub_type"] = "open_world_rpg"
+
+    result["sanitized_by_brain"] = True
+
+    return result
+
+
+# Wrap the existing Universal Director with the safety sanitizer.
+_original_generate_universal_dna = generate_universal_dna
+
+
+def generate_universal_dna(user_request, api_key=None, model="llama-3.1-8b-instant"):
+    """
+    Safe Universal Director wrapper.
+
+    The original Brain function generates the UniversalDNA.
+    This wrapper sanitizes it before it reaches the Universal Compiler.
+    """
+    result = _original_generate_universal_dna(
+        user_request,
+        api_key=api_key,
+        model=model
+    )
+
+    return sanitize_universal_dna(result, user_request)

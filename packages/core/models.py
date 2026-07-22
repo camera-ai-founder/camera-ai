@@ -745,3 +745,132 @@ class FidelityRoute(BaseModel):
     render_pipeline: RenderPipeline = Field(..., description="The exact rendering pipeline to use.")
     fallback_level: int = Field(..., ge=0, le=5, description="The level we fell back to if requested level was too high.")
     estimated_load_ms: float = Field(default=0.0, description="Estimated time to render/compile this level in ms.")
+    # ==============================================================================
+# DAY 37: UNIVERSAL APPLICATION COMPILER DNA (PILLAR 24) - APPEND ONLY
+# ==============================================================================
+# This block is additive.
+# It does NOT modify anything above it.
+# It reuses the existing DesignTokens and HardwareTier schemas already present.
+# ==============================================================================
+
+class UniversalDomain(str, Enum):
+    """
+    The ten reality domains supported by the Universal Compiler.
+
+    The Brain chooses the domain.
+    The Universal Compiler routes the domain.
+    The existing engines execute the route.
+    """
+    GAME = "game"
+    SAAS = "saas"
+    DESKTOP = "desktop"
+    MOBILE = "mobile"
+    VR = "vr"
+    FILM = "film"
+    SCIENCE = "science"
+    MUSIC = "music"
+    ARCHITECTURE = "architecture"
+    EDUCATION = "education"
+
+
+class TargetPlatform(str, Enum):
+    """
+    Where the compiled reality is intended to run.
+    """
+    WEB = "web"
+    DESKTOP = "desktop"
+    MOBILE = "mobile"
+    VR = "vr"
+    ALL = "all"
+
+
+class UniversalDNA(BaseModel):
+    """
+    The master instruction packet for the Universal Compiler.
+
+    This does NOT contain raw code.
+    It contains ontological intent.
+
+    The Brain outputs this.
+    The Universal Compiler reads it.
+    Existing engines execute the resolved route.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    project_name: str = Field(
+        default="Untitled Reality",
+        description="Human-readable project name."
+    )
+
+    domain: UniversalDomain = Field(
+        default=UniversalDomain.SAAS,
+        description="Primary reality domain selected by the Brain."
+    )
+
+    sub_type: str = Field(
+        default="general",
+        description="Specific application type inside the domain, e.g. open_world_rpg, crm, analytics_dashboard."
+    )
+
+    required_engines: List[str] = Field(
+        default_factory=list,
+        description="Engines requested by the Brain. The Universal Compiler resolves the final authoritative route."
+    )
+
+    design_tokens: Optional[DesignTokens] = Field(
+        default=None,
+        description="Optional visual design atoms. If absent, engines use safe defaults."
+    )
+
+    hardware_tier: HardwareTier = Field(
+        default=HardwareTier.POTATO,
+        description="Safe hardware target. Potato protects the i3 laptop."
+    )
+
+    target_platform: TargetPlatform = Field(
+        default=TargetPlatform.WEB,
+        description="Where the compiled reality is intended to run."
+    )
+
+
+class DomainRoute(BaseModel):
+    """
+    The traffic ticket created by the Universal Compiler.
+
+    This tells the system:
+    - which domain was resolved,
+    - which existing engines should be used,
+    - which template vault should be consulted,
+    - and whether a fallback domain was used.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    domain: str = Field(
+        default="saas",
+        description="The resolved domain route."
+    )
+
+    sub_type: str = Field(
+        default="general",
+        description="The resolved sub-type inside the domain."
+    )
+
+    resolved_engines: List[str] = Field(
+        default_factory=list,
+        description="Existing engines selected for this domain."
+    )
+
+    template_vault: str = Field(
+        default="saas_templates",
+        description="Template vault selected for this domain."
+    )
+
+    estimated_compile_ms: float = Field(
+        default=0.0,
+        description="Estimated compile time in milliseconds."
+    )
+
+    fallback_domain: Optional[str] = Field(
+        default=None,
+        description="Fallback domain if requested domain is not yet implemented."
+    )
