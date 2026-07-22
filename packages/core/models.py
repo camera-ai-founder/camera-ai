@@ -698,3 +698,50 @@ class AAAMoment(BaseModel):
     tutorial_directive: Optional[str] = None
     
     resolved: bool = False
+
+    # ==============================================================================
+# DAY 36: THE FIDELITY LADDER GROUNDWORK (PILLAR 23) - APPEND ONLY
+# ==============================================================================
+
+class ShaderProfile(str, Enum):
+    TOON = "toon"
+    PBR = "pbr"
+    UNLIT = "unlit"
+    CUSTOM = "custom"
+
+class HardwareTier(str, Enum):
+    POTATO = "potato"   # i3 laptops, strict $0 cloud
+    MID = "mid"
+    HIGH = "high"
+    ULTRA = "ultra"
+    CLOUD = "cloud"
+
+class RenderPipeline(str, Enum):
+    PRIMITIVE = "primitive"         # L0
+    SDF = "sdf"                     # L1
+    PROCEDURAL_MESH = "procedural_mesh" # L2
+    GAUSSIAN_SPLAT = "gaussian_splat"   # L3
+    ASSET_SWARM = "asset_swarm"         # L4
+    AI_GENERATED = "ai_generated"       # L5
+
+class FidelityDNA(BaseModel):
+    """The DESIRED fidelity requested by the Brain."""
+    model_config = ConfigDict(extra="allow")
+    
+    entity_id: str = Field(..., description="Unique ID of the entity requesting render.")
+    fidelity_level: int = Field(..., ge=0, le=5, description="Desired visual fidelity level (0 to 5).")
+    style_tags: List[str] = Field(default_factory=list, description="e.g., ['cyberpunk', 'organic', 'brutalist']")
+    color_palette: Dict[str, str] = Field(default_factory=dict, description="Mapping of semantic role to hex color.")
+    shader_profile: ShaderProfile = Field(default=ShaderProfile.PBR, description="Material style.")
+    lod_bias: float = Field(default=0.5, ge=0.0, le=1.0, description="Level of detail bias (0.0 to 1.0).")
+    hardware_tier: HardwareTier = Field(default=HardwareTier.POTATO, description="Target hardware capability.")
+
+class FidelityRoute(BaseModel):
+    """The ACTUAL fidelity resolved by the Fidelity Engine after hardware checks."""
+    model_config = ConfigDict(extra="allow")
+    
+    entity_id: str = Field(..., description="The entity this route applies to.")
+    resolved_level: int = Field(..., ge=0, le=5, description="The ACTUAL level the engine will render.")
+    render_pipeline: RenderPipeline = Field(..., description="The exact rendering pipeline to use.")
+    fallback_level: int = Field(..., ge=0, le=5, description="The level we fell back to if requested level was too high.")
+    estimated_load_ms: float = Field(default=0.0, description="Estimated time to render/compile this level in ms.")

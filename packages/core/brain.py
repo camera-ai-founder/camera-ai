@@ -3134,3 +3134,24 @@ RULES:
 5. The moment must feel ALIVE, not mechanical."""
 
     return prompt
+
+    # ==============================================================================
+# DAY 36: THE FIDELITY DIRECTOR (PILLAR 23) - APPEND ONLY
+# ==============================================================================
+
+def generate_fidelity_prompt(entity_description: str, hardware_tier: str, max_level: int) -> str:
+    """
+    The Fidelity Director. Formats a strict prompt for the Groq LLM.
+    It forces the AI to choose visual styles that respect the hardware budget,
+    ensuring the i3 laptop is never asked to render heavy, impossible assets.
+    """
+    prompt = f"""You are the Fidelity Director for the Universal Reality Compiler.
+The entity we are generating is: {entity_description}.
+The current hardware tier is: {hardware_tier}.
+The absolute maximum fidelity level this hardware can handle is: {max_level}.
+
+Your task: Choose the optimal fidelity_level (between 0 and {max_level}) and the best style_tags for this entity.
+Output ONLY the FidelityDNA JSON. 
+Do NOT write raw code. Do NOT write explanations. Do NOT include markdown formatting like ```json.
+"""
+    return prompt
