@@ -3220,8 +3220,107 @@ def evolve_rollback(system_name):
     cli_evolve_rollback(system_name)
 
 cli.add_command(evolve)
+# ==========================================
+# DAY 39: INFINITE SCALE ENGINE (PILLAR 26)
+# CLI INTEGRATION (APPEND ONLY)
+# ==========================================
+import click
+from rich.console import Console
+from rich.table import Table
+from packages.core.models import HardwareTier, ScaleDNA
+from packages.core.scale_engine import calculate_shards, sync_shards, monitor_scale
+
+console = Console()
+
+@click.group(name="scale")
+def scale_group():
+    """Commands for the Infinite Scale Engine (Pillar 26)."""
+    pass
+
+@scale_group.command(name="simulate")
+@click.argument("entity_count", type=int)
+@click.option("--tier", type=click.Choice(["potato", "mid", "high", "ultra", "cloud"]), default="potato", help="Hardware tier")
+def simulate_scale(entity_count: int, tier: str):
+    """Simulate shard distribution for a given entity count."""
+    hw_tier = HardwareTier(tier)
+    shards = calculate_shards(entity_count, hw_tier)
+    
+    table = Table(title=f"Scale Simulation: {entity_count} Entities ({tier.upper()} Tier)")
+    table.add_column("Shard ID", justify="center", style="cyan")
+    table.add_column("Worker ID", style="magenta")
+    table.add_column("Entity Count", justify="right", style="green")
+    
+    for s in shards:
+        table.add_row(str(s.shard_id), s.worker_id, str(s.entity_count))
+        
+    console.print(table)
+
+@scale_group.command(name="rebalance")
+def rebalance_scale():
+    """Simulate an overloaded shard and trigger auto-rebalancing."""
+    # Simulate a potato tier and manually overload it to test the math
+    shards = calculate_shards(250, HardwareTier.POTATO)
+    if shards:
+        shards[0].entity_count = 250
+        shards[0].entity_ids = [f"entity_{i}" for i in range(250)]
+    
+    events, updated_shards = monitor_scale(shards, max_entities_per_shard=200, rebalance_threshold=0.8)
+    
+    console.print(f"[bold red]Rebalance Events Triggered: {len(events)}[/bold red]")
+    for event in events:
+        console.print(f"- {event.event_type.value}: {event.details}")
+        
+    table = Table(title="Shards After Rebalancing")
+    table.add_column("Shard ID", justify="center", style="cyan")
+    table.add_column("Entity Count", justify="right", style="green")
+    for s in updated_shards:
+        table.add_row(str(s.shard_id), str(s.entity_count))
+    console.print(table)
+
+@scale_group.command(name="sync")
+@click.argument("shard_a", type=int)
+@click.argument("shard_b", type=int)
+def sync_scale(shard_a: int, shard_b: int):
+    """Simulate a cross-shard interaction and generate the StateDelta."""
+    shards = calculate_shards(100, HardwareTier.MID)
+    
+    s_a = next((s for s in shards if s.shard_id == shard_a), None)
+    s_b = next((s for s in shards if s.shard_id == shard_b), None)
+    
+    if not s_a or not s_b or not s_a.entity_ids or not s_b.entity_ids:
+        console.print("[red]Invalid shard IDs for this simulation.[/red]")
+        return
+        
+    deltas = sync_shards(s_a, s_b, s_a.entity_ids[0], s_b.entity_ids[0], "collision")
+    
+    console.print(f"[bold green]Generated {len(deltas)} StateDelta(s) for cross-shard sync![/bold green]")
+    for d in deltas:
+        console.print(d.model_dump_json(indent=2))
+
+@scale_group.command(name="status")
+def scale_status():
+    """Print the current scale configuration."""
+    dna = ScaleDNA(
+        total_entities=500,
+        shard_count=2,
+        entities_per_shard=250,
+        worker_type="web_worker",
+        sync_rate_ms=100,
+        hardware_tier=HardwareTier.MID,
+        max_entities_per_shard=1000,
+        rebalance_threshold=0.8
+    )
+    console.print("[bold]Current Scale Status:[/bold]")
+    console.print(dna.model_dump_json(indent=2))
+
+# Register the new group to your main CLI app (Assuming your main group is named 'cli')
+try:
+    cli.add_command(scale_group)
+except NameError:
+    pass # If 'cli' is not defined in this exact scope, manually add scale_group to your main dispatcher
 
 if __name__ == '__main__':
 
     cli()
+    
     

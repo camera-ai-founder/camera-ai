@@ -929,3 +929,57 @@ class SystemBlueprint(BaseModel):
     registration_status: RegistrationStatusEnum = RegistrationStatusEnum.PENDING
     created_at: datetime = Field(default_factory=datetime.utcnow)
     version: int = 1
+
+    # ==========================================
+# DAY 39: INFINITE SCALE ENGINE (PILLAR 26)
+# ==========================================
+
+# (Note: BaseModel, Field, Enum, datetime, List, Dict, Any are already imported at the top of the file!)
+# (Note: HardwareTier was already defined on Day 36, so we reuse it to protect the algorithm!)
+
+class WorkerType(str, Enum):
+    MAIN_THREAD = "main_thread"
+    WEB_WORKER = "web_worker"
+    EDGE_FUNCTION = "edge_function"
+    CLOUD_INSTANCE = "cloud_instance"
+
+class ShardStatus(str, Enum):
+    ACTIVE = "active"
+    IDLE = "idle"
+    OVERLOADED = "overloaded"
+    SYNCING = "syncing"
+
+class ScaleEventType(str, Enum):
+    SHARD_CREATED = "shard_created"
+    SHARD_SPLIT = "shard_split"
+    SHARD_MERGED = "shard_merged"
+    WORKER_ASSIGNED = "worker_assigned"
+    REBALANCE_TRIGGERED = "rebalance_triggered"
+    SYNC_COMPLETED = "sync_completed"
+
+class ScaleDNA(BaseModel):
+    """The master blueprint for how the world scales."""
+    total_entities: int = Field(..., description="Total number of entities in the world")
+    shard_count: int = Field(..., description="Number of shards the world is divided into")
+    entities_per_shard: int = Field(..., description="Average entities per shard")
+    worker_type: WorkerType = Field(..., description="Type of worker processing the shards")
+    sync_rate_ms: int = Field(100, description="How often shards sync deltas in milliseconds")
+    hardware_tier: HardwareTier = Field(..., description="The target hardware tier")
+    max_entities_per_shard: int = Field(..., description="Maximum entities a single shard can hold")
+    rebalance_threshold: float = Field(0.8, description="Threshold (0-1) to trigger a shard split")
+
+class ShardConfig(BaseModel):
+    """The configuration and state of a single, isolated shard."""
+    shard_id: int = Field(..., description="Unique ID for this shard")
+    entity_ids: List[str] = Field(default_factory=list, description="List of entity IDs in this shard")
+    worker_id: str = Field(..., description="ID of the worker processing this shard")
+    status: ShardStatus = Field(ShardStatus.ACTIVE, description="Current status of the shard")
+    last_sync_timestamp: datetime = Field(default_factory=datetime.utcnow, description="Last time this shard synced")
+    entity_count: int = Field(0, description="Current number of entities in the shard")
+    cpu_load_percent: float = Field(0.0, description="Current CPU load of the worker")
+
+class ScaleEvent(BaseModel):
+    """Logs auto-rebalancing and sync events for the Brain to monitor."""
+    event_type: ScaleEventType = Field(..., description="Type of scale event")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the event occurred")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Additional details about the event")

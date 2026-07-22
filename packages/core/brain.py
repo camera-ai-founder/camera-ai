@@ -3712,3 +3712,28 @@ Example structure:
 }}
 """
     return prompt
+
+    # ==========================================
+# DAY 39: INFINITE SCALE ENGINE (PILLAR 26)
+# THE SCALE DIRECTOR (APPENDED TO BRAIN)
+# ==========================================
+
+def generate_scale_prompt(scale_dna) -> str:
+    """
+    Generates a Groq prompt for the Scale Director.
+    The Brain uses this to manage entity spawning based on hardware limits.
+    """
+    # Calculate the absolute maximum capacity of the current hardware setup
+    max_total = scale_dna.shard_count * scale_dna.max_entities_per_shard
+    capacity_percent = (scale_dna.total_entities / max_total) * 100 if max_total > 0 else 0
+
+    prompt = f"""You are the Scale Director. The current world has {scale_dna.total_entities} entities across {scale_dna.shard_count} shards. 
+The hardware tier is {scale_dna.hardware_tier.value}. 
+The maximum capacity is {max_total}. 
+Current capacity usage is {capacity_percent:.2f}%.
+
+If the world is approaching capacity (above 80%), suggest which entity types to reduce spawning for (e.g., background NPCs, minor particles, distant enemies).
+Output ONLY ScaleDNA JSON adjustments to lower the entity count. 
+Do NOT write code. Do NOT write raw text. Output strictly valid JSON matching the ScaleDNA schema."""
+
+    return prompt
