@@ -3669,3 +3669,46 @@ def generate_universal_dna(user_request, api_key=None, model="llama-3.1-8b-insta
     )
 
     return sanitize_universal_dna(result, user_request)
+    # ==========================================================
+# DAY 38: SELF-EVOLVING ARCHITECTURE (PILLAR 25)
+# APPEND ONLY - DO NOT MODIFY EXISTING BRAIN FUNCTIONS
+# ==========================================================
+
+def generate_evolution_prompt(request_description: str) -> str:
+    """
+    Formats the strict prompt for the Architect AI.
+    Forces the AI to output ONLY EvolutionDNA JSON.
+    Prevents hallucination of raw code or dangerous imports.
+    """
+    prompt = f"""You are the Architect AI. The user needs a new system: {request_description}.
+
+Design a SystemBlueprint.
+1. Define the schema fields (typed: str, int, float, bool, list, dict, enum. NO code types).
+2. Choose a compiler_type (MUST be exactly one of: "template_stamper", "json_mapper", or "math_engine").
+3. List the template names (must be unique, no spaces).
+4. List the required existing engines (e.g., "ui_synthesizer", "backend_compiler").
+5. Estimate the hardware cost (MUST be exactly one of: "free", "light", "moderate", "heavy"). Remember the user is on a potato laptop, so prefer "free" or "light".
+
+Output ONLY EvolutionDNA JSON.
+Do NOT write code.
+Do NOT write functions.
+Do NOT write imports.
+Do NOT use markdown formatting like ```json.
+Output ONLY the raw JSON object.
+
+Example structure:
+{{
+    "request_description": "{request_description}",
+    "new_system_name": "video_timeline",
+    "new_schema_fields": [
+        {{"field_name": "clips", "field_type": "list", "default_value": "[]"}},
+        {{"field_name": "duration", "field_type": "float", "default_value": "0.0"}}
+    ],
+    "new_compiler_type": "template_stamper",
+    "new_template_names": ["timeline_html"],
+    "required_engines": ["ui_synthesizer"],
+    "hardware_cost": "light",
+    "guardrail_check": "pending"
+}}
+"""
+    return prompt

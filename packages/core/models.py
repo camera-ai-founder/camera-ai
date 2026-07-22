@@ -874,3 +874,58 @@ class DomainRoute(BaseModel):
         default=None,
         description="Fallback domain if requested domain is not yet implemented."
     )
+
+        # ==========================================================
+# DAY 38: SELF-EVOLVING ARCHITECTURE (PILLAR 25)
+# ADDITIVE APPEND ONLY - DO NOT MODIFY EXISTING SCHEMAS
+# ==========================================================
+
+class CompilerTypeEnum(str, Enum):
+    TEMPLATE_STAMPER = "template_stamper"
+    JSON_MAPPER = "json_mapper"
+    MATH_ENGINE = "math_engine"
+
+class HardwareCostEnum(str, Enum):
+    FREE = "free"
+    LIGHT = "light"
+    MODERATE = "moderate"
+    HEAVY = "heavy"
+
+class GuardrailCheckEnum(str, Enum):
+    PENDING = "pending"
+    PASSED = "passed"
+    FAILED = "failed"
+
+class RegistrationStatusEnum(str, Enum):
+    PENDING = "pending"
+    REGISTERED = "registered"
+    REJECTED = "rejected"
+
+class SchemaFieldDefinition(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    field_name: str
+    field_type: str
+    default_value: str
+
+class EvolutionDNA(BaseModel):
+    """The raw request from the Architect AI to build a new system."""
+    model_config = ConfigDict(extra="allow")
+    request_description: str
+    new_system_name: str
+    new_schema_fields: List[SchemaFieldDefinition]
+    new_compiler_type: CompilerTypeEnum
+    new_template_names: List[str]
+    required_engines: List[str]
+    hardware_cost: HardwareCostEnum
+    guardrail_check: GuardrailCheckEnum = GuardrailCheckEnum.PENDING
+
+class SystemBlueprint(BaseModel):
+    """The validated, safe blueprint ready for registration."""
+    model_config = ConfigDict(extra="allow")
+    system_name: str
+    schema_definition: Dict[str, Any]
+    compiler_definition: Dict[str, Any]
+    template_definitions: List[Dict[str, Any]]
+    registration_status: RegistrationStatusEnum = RegistrationStatusEnum.PENDING
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    version: int = 1
